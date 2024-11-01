@@ -1,0 +1,15 @@
+/* global.css */
+@import url('https://fonts.googleapis.com/css2?family=Pirata+One&display=swap');
+
+* {
+    cursor: url('../assets/others/cursor.png'), auto;
+    color: white;
+    font-family: "Pirata One", system-ui;
+    box-sizing: border-box;
+}
+
+body, html, #root {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+}

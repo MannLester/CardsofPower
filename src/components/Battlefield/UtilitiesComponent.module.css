@@ -1,0 +1,138 @@
+/* UtilitiesComponent.module.css */
+.row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 80%;
+    margin: 1rem auto;
+}
+
+.graveyard {
+    position: fixed;
+    width: 75%;
+    height: 75%;
+    padding: 2em;
+    border-radius: 3rem;
+    z-index: 9999;
+    background-color: rgba(0, 0, 0, 0.9);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.closeGraveyardButton {
+    align-self: flex-end;
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+
+.boneIcon {
+    height: 2rem;
+}
+
+.graveyardTitle {
+    text-align: center;
+    font-size: 2rem;
+    margin-bottom: 1.5rem;
+}
+
+.graveyardCards {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.graveyardCard {
+    margin: 0.5rem;
+    width: 80px;
+    height: 120px;
+}
+
+.carousel {
+    display: flex;
+    align-items: center;
+}
+
+.navButton {
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+
+.deck {
+    display: flex;
+    overflow: hidden;
+    margin: 0 1rem;
+}
+
+.deckCard, .blankCard {
+    width: 80px;
+    height: 120px;
+    margin: 0 0.25rem;
+    cursor: pointer;
+    transition: transform 0.3s ease;
+}
+
+.deckCard:hover {
+    transform: scale(1.05);
+}
+
+.blankCard {
+    cursor: default;
+}
+
+.stats {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    width: 17.86vh;
+    border-radius: 10%;
+    font-size: 1.2rem;
+    background-color: rgba(0, 0, 0, 0.7);
+}
+
+.username {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.stat {
+    display: flex;
+    align-items: center;
+    margin: 0.5rem 0;
+}
+
+.icon {
+    height: 1.5em;
+    margin-right: 0.5rem;
+}
+
+.battleActions {
+    display: flex;
+    justify-content: center;
+    margin-top: 1rem;
+}
+
+.actionButton {
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+    border: none;
+    border-radius: 0.5rem;
+    background-color: #4CAF50;
+    color: white;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.actionButton:disabled {
+    background-color: grey;
+    cursor: not-allowed;
+}
+
+.actionButton:hover:not(:disabled) {
+    background-color: #45a049;
+}

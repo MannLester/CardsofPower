@@ -1,0 +1,19 @@
+/* Timer.module.css */
+.timer {
+    position: fixed;
+    top: -12rem;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 20rem;
+    height: 20rem;
+    border-radius: 50%;
+    padding: 1rem;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    background-color: rgba(0, 0, 0, 0.7);
+    font-size: 1.4rem;
+    color: white;
+}
