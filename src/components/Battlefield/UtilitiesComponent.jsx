@@ -12,17 +12,11 @@ import boneIcon from '../../assets/others/bone.png';
 import { ref as dbRef, update, push } from 'firebase/database';
 import { database } from '../firebaseConfig'; // Adjust import path
 
-/**
- * UtilitiesComponent
- * Manages graveyard visibility and deck interactions.
- */
 const UtilitiesComponent = React.memo(({
-    isOpponent, // Indicates if this Utilities is for the opponent
+    isOpponent,
     username,
     deck,
     graveyard,
-    leftBtn,
-    rightBtn,
     roomId,
     playerId,
     isActiveTurn,
@@ -31,11 +25,11 @@ const UtilitiesComponent = React.memo(({
     currentRound,
     isGraveyardVisible,
     toggleGraveyard,
-    handleCardClick // Passed from Battlefield to handle card selection
+    handleCardClick
 }) => {
     const [currentIndex, setCurrentIndex] = useState(0);
-    const cardsToShow = 6;
-    const blankCard = blankCardImage; // Using dynamic blank card
+    const cardsToShow = 5;
+    const blankCard = blankCardImage;
 
     const handleNext = useCallback(() => {
         setCurrentIndex(prev => Math.min(prev + cardsToShow, deck.length - cardsToShow));
@@ -47,30 +41,36 @@ const UtilitiesComponent = React.memo(({
 
     const graveyardContent = useMemo(() => {
         if (isGraveyardVisible) {
-            if (graveyard.length === 0) {
-                return <p>Your graveyard is currently empty.</p>;
-            } else {
-                return (
-                    <div className={styles.graveyardCards}>
-                        {graveyard.map((card, index) => (
+            return (
+                <div className={styles.graveyardCards}>
+                    {graveyard.length === 0 ? (
+                        <p className={styles.emptyMessage}>Your graveyard is currently empty.</p>
+                    ) : (
+                        graveyard.map((card, index) => (
                             <img
                                 className={styles.graveyardCard}
                                 key={index}
                                 src={card}
                                 alt={`Graveyard Card ${index + 1}`}
                             />
-                        ))}
-                    </div>
-                );
-            }
+                        ))
+                    )}
+                </div>
+            );
         }
         return null;
     }, [isGraveyardVisible, graveyard]);
 
-    // For opponent's Utilities, display back cards; for player's Utilities, display actual cards
-    const displayedDeck = isOpponent ? deck.map(() => backCard) : deck;
+    const displayedDeck = deck.map((card, index) => (
+        <img
+            key={index}
+            src={isOpponent ? backCard : card}
+            alt={isOpponent ? `Back of Card ${index + 1}` : `Card ${index + 1}`}
+            className={styles.deckCard}
+            onClick={!isOpponent ? () => handleCardClick(card, index) : undefined}
+        />
+    ));
 
-    // Function to handle player actions (e.g., Attack)
     const handleAction = async () => {
         if (!isActiveTurn) {
             alert("It's not your turn!");
@@ -78,37 +78,28 @@ const UtilitiesComponent = React.memo(({
         }
 
         try {
-            // Implement your game logic here
             console.log(`${username} performed an action in round ${currentRound}`);
 
-            // Example: Update lastCard in the database
             const roomRef = dbRef(database, `rooms/${roomId}`);
             const randomCard = deck[Math.floor(Math.random() * deck.length)];
             await update(roomRef, { lastCard: randomCard });
 
-            // Example: Add card to graveyard
             const graveyardPath = `rooms/${roomId}/players/${playerId}/graveyard`;
             const graveyardRef = dbRef(database, graveyardPath);
-            push(graveyardRef, randomCard);
+            await push(graveyardRef, randomCard);
 
-            // Switch turn after action by invoking switchTurn
             await switchTurn();
-
-            // Log the action
             console.log(`Action performed by ${username}. Turn switched.`);
         } catch (error) {
             console.error('Error during action:', error);
         }
     };
 
-    // Prevent clicking on opponent's graveyard
-    const graveyardClickHandler = isOpponent ? () => {} : toggleGraveyard;
-
     return (
         <>
             {isGraveyardVisible && (
-                <div className={styles.graveyard}>
-                    <button className={styles.closeGraveyardButton} onClick={toggleGraveyard} aria-label="Close Graveyard">
+                <div className={styles.graveyardOverlay}>
+                    <button className={styles.closeButton} onClick={toggleGraveyard} aria-label="Close Graveyard">
                         <img className={styles.boneIcon} src={boneIcon} alt="Close Graveyard" />
                     </button>
                     <h2 className={styles.graveyardTitle}>{username}'s Graveyard</h2>
@@ -116,41 +107,26 @@ const UtilitiesComponent = React.memo(({
                 </div>
             )}
 
-            <div className={styles.row}>
-                {/* Graveyard Icon */}
-                {/* Only allow graveyard toggle if it's the player's own graveyard */}
+            <div className={styles.utilitiesRow}>
                 <img
-                    onClick={graveyardClickHandler}
+                    onClick={isOpponent ? undefined : toggleGraveyard}
                     src={graveyardCard}
                     alt="Graveyard"
                     className={styles.graveyardIcon}
-                    style={{ cursor: isOpponent ? 'default' : 'pointer', opacity: isOpponent ? 0.5 : 1 }}
                 />
 
-                {/* Deck Carousel */}
                 <div className={styles.carousel}>
-                    {/* Only allow deck navigation if it's the player's own deck */}
                     <button
                         onClick={handlePrevious}
                         className={styles.navButton}
                         disabled={currentIndex === 0 || isOpponent}
-                        aria-label="Previous Cards"
-                        style={{ pointerEvents: isOpponent ? 'none' : 'auto', opacity: isOpponent ? 0.5 : 1 }}
                     >
                         <img src={leftBtn} alt="Previous" />
                     </button>
 
                     <div className={styles.deck}>
-                        {displayedDeck.slice(currentIndex, currentIndex + cardsToShow).map((card, index) => (
-                            <img
-                                key={index}
-                                src={card}
-                                alt={`Card ${currentIndex + index + 1}`}
-                                className={styles.deckCard}
-                                onClick={!isOpponent ? () => handleCardClick(card, currentIndex + index) : undefined}
-                            />
-                        ))}
-                        {Array.from({ length: Math.max(0, cardsToShow - displayedDeck.slice(currentIndex, currentIndex + cardsToShow).length) }).map((_, index) => (
+                        {displayedDeck.slice(currentIndex, currentIndex + cardsToShow)}
+                        {Array.from({ length: Math.max(0, cardsToShow - displayedDeck.length) }).map((_, index) => (
                             <img key={`blank-${index}`} src={blankCard} alt="Blank Card" className={styles.blankCard} />
                         ))}
                     </div>
@@ -159,35 +135,31 @@ const UtilitiesComponent = React.memo(({
                         onClick={handleNext}
                         className={styles.navButton}
                         disabled={currentIndex + cardsToShow >= deck.length || isOpponent}
-                        aria-label="Next Cards"
-                        style={{ pointerEvents: isOpponent ? 'none' : 'auto', opacity: isOpponent ? 0.5 : 1 }}
                     >
                         <img src={rightBtn} alt="Next" />
                     </button>
                 </div>
 
-                {/* Player Stats */}
                 <div className={styles.stats}>
                     <p className={styles.username}>{username}</p>
                     <p className={styles.stat}>
-                        <img className={styles.icon} src={heartIcon} alt='HP Icon' />HP: 5000
+                        <img className={styles.icon} src={heartIcon} alt="HP" /> HP: 100
                     </p>
                     <p className={styles.stat}>
-                        <img className={styles.icon} src={cardsIcon} alt='Cards Icon' />Cards: {deck.length}
+                        <img className={styles.icon} src={cardsIcon} alt="Cards" /> Cards: {deck.length}
                     </p>
                 </div>
             </div>
 
-            {/* Battle Actions */}
             {!isOpponent && gameStage === 'battle' && (
                 <div className={styles.battleActions}>
-                    <button onClick={handleAction} disabled={!isActiveTurn} className={styles.actionButton}>
+                    <button onClick={handleAction} disabled={!isActiveTurn} className={isActiveTurn ? styles.actionButton : styles.actionButtonDisabled}>
                         Attack
                     </button>
-                    {/* Add more actions as needed */}
                 </div>
             )}
         </>
-    )});
+    );
+});
 
 export default UtilitiesComponent;
