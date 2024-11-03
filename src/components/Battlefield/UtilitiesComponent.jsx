@@ -77,21 +77,42 @@ const UtilitiesComponent = React.memo(({
             return;
         }
 
+        // Select a valid random card from the deck
+        const validCards = deck.filter(card => card && card !== blankCardImage);
+        if (validCards.length === 0) {
+            alert('No valid card found for action.');
+            console.error('No valid card available in the deck.');
+            return;
+        }
+
+        const randomCard = validCards[Math.floor(Math.random() * validCards.length)];
+
         try {
             console.log(`${username} performed an action in round ${currentRound}`);
 
-            const roomRef = dbRef(database, `rooms/${roomId}`);
-            const randomCard = deck[Math.floor(Math.random() * deck.length)];
-            await update(roomRef, { lastCard: randomCard });
+            // Ensure that `randomCard` is defined before updating Firebase
+            if (randomCard) {
+                const roomRef = dbRef(database, `rooms/${roomId}`);
+                await update(roomRef, {
+                    lastCard: {
+                        card: randomCard,
+                        owner: playerId
+                    }
+                });
 
-            const graveyardPath = `rooms/${roomId}/players/${playerId}/graveyard`;
-            const graveyardRef = dbRef(database, graveyardPath);
-            await push(graveyardRef, randomCard);
+                const graveyardPath = `rooms/${roomId}/players/${playerId}/graveyard`;
+                const graveyardRef = dbRef(database, graveyardPath);
+                await push(graveyardRef, randomCard);
 
-            await switchTurn();
-            console.log(`Action performed by ${username}. Turn switched.`);
+                await switchTurn();
+                console.log(`Action performed by ${username}. Turn switched.`);
+            } else {
+                alert('Error: No card selected for the action.');
+                console.error('Error: Selected card is undefined.');
+            }
         } catch (error) {
             console.error('Error during action:', error);
+            alert('There was an error performing the action. Please try again.');
         }
     };
 

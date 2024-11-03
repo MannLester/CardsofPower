@@ -61,7 +61,7 @@ function Battlefield() {
     const [gameStage, setGameStage] = useState('lobby'); // 'lobby', 'waiting', 'preparation', 'battle', 'finished'
     const [timer, setTimer] = useState(60); // Initial timer value
     const [currentRound, setCurrentRound] = useState(0);
-    const totalRounds = 10;
+    const totalRounds = 5;
 
     // Separate state variables for player usernames
     const [player1Username, setPlayer1Username] = useState('');
@@ -283,7 +283,7 @@ function Battlefield() {
                     console.log('Both players have joined. Starting preparation stage.');
                     await update(gameStateRef, {
                         gameStage: 'preparation',
-                        timer: 30, // Set timer to 30 seconds
+                        timer: 5, // TIMER FOR TESTING ONLY
                         currentRound: 1, // Start at Round 1
                         currentTurn: 'player1' // Initialize currentTurn
                     });
@@ -490,7 +490,7 @@ function Battlefield() {
                                 console.log('Both players have joined. Starting preparation stage.');
                                 await update(gameStateRef, {
                                     gameStage: 'preparation',
-                                    timer: 30, // Set timer to 30 seconds
+                                    timer: 5, // TIMER FOR TESTING ONLY
                                     currentRound: 1, // Start at Round 1
                                     currentTurn: 'player1' // Initialize currentTurn
                                 });
