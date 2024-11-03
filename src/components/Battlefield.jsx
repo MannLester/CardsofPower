@@ -1,5 +1,5 @@
 // Battlefield.jsx
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { storage, database } from './firebaseConfig'; // Import Storage and Database instances
 import {
     ref as dbRef,
@@ -7,7 +7,6 @@ import {
     push,
     onValue,
     update,
-    remove,
     get,
     runTransaction // Import runTransaction for Firebase transactions
 } from 'firebase/database'; // Realtime Database ref functions
@@ -31,10 +30,126 @@ import boneIcon from '../assets/others/bone.png';
 const placeholderCard = backCard;
 
 /**
- * Utilities Component
- * Moved outside of Battlefield and memoized to preserve state across Battlefield re-renders.
+ * Timer Component
+ * Displays the game timer and current stage.
  */
-const Utilities = React.memo(function Utilities({
+function Timer({ gameStage, timer, currentRound, totalRounds, activePlayer }) {
+    const formatTime = (seconds) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    };
+
+    let stageText = '';
+    if (gameStage === 'waiting') {
+        stageText = 'Waiting for Opponent...';
+    } else if (gameStage === 'preparation') {
+        stageText = 'Preparation Stage';
+    } else if (gameStage === 'battle') {
+        stageText = `Turn: ${activePlayer}`;
+    } else if (gameStage === 'finished') {
+        stageText = 'Battle Finished';
+    }
+
+    return (
+        <div className="timer">
+            <p>{stageText}</p>
+            {(gameStage === 'preparation' || gameStage === 'battle') && (
+                <p>Time Remaining: {formatTime(timer)}</p>
+            )}
+            {gameStage === 'battle' && (
+                <p>Round {currentRound} of {totalRounds}</p>
+            )}
+        </div>
+    );
+}
+
+/**
+ * WaitingForPlayer Component
+ * Displays a waiting message and room ID for the room creator.
+ */
+function WaitingForPlayer({ roomId, playerId }) {
+    // Determine if the current player is the room creator
+    const isRoomCreator = playerId === 'player1';
+
+    // Function to copy roomId to clipboard
+    const copyRoomId = () => {
+        navigator.clipboard.writeText(roomId).then(() => {
+            alert('Room ID copied to clipboard!');
+        }).catch((err) => {
+            console.error('Failed to copy Room ID: ', err);
+        });
+    };
+
+    return (
+        <div className="waiting-stage">
+            <h2>Waiting for Opponent...</h2>
+            {isRoomCreator && (
+                <div className="room-id-section">
+                    <p>Your Room ID:</p>
+                    <div className="room-id-display">
+                        <input
+                            type="text"
+                            value={roomId}
+                            readOnly
+                            className="room-id-input"
+                        />
+                        <button onClick={copyRoomId} className="copy-button">Copy</button>
+                    </div>
+                </div>
+            )}
+            <p>Share the Room ID with your opponent to start the game.</p>
+        </div>
+    );
+}
+
+/**
+ * PreparationStage Component
+ * Displays the preparation stage message.
+ */
+function PreparationStage() {
+    return (
+        <div className="preparation-stage">
+            <h2>Preparation Stage</h2>
+            <p>Get ready for the battle! You have 1 minute to prepare your strategy.</p>
+        </div>
+    );
+}
+
+/**
+ * EndStage Component
+ * Displays the end of the battle message.
+ */
+function EndStage() {
+    return (
+        <div className="end-stage">
+            <h2>Battle Finished</h2>
+            <p>Congratulations! The battle has concluded.</p>
+            {/* You can add more details like results, scores, etc. */}
+        </div>
+    );
+}
+
+/**
+ * CardSlots Component
+ * Renders a set of card images.
+ */
+function CardSlots({ cards }) {
+    return (
+        <div className="card-slot my-4">
+            {cards.map((card, index) => (
+                <img key={index} src={card} alt={`Card ${index + 1}`} />
+            ))}
+        </div>
+    );
+}
+
+/**
+ * UtilitiesComponent
+ * Manages graveyard visibility and deck interactions.
+ * Defined outside of Battlefield to prevent redefinition on each render.
+ */
+const UtilitiesComponent = React.memo(({
     isOpponent, // Indicates if this Utilities is for the opponent
     username,
     deck,
@@ -46,22 +161,21 @@ const Utilities = React.memo(function Utilities({
     isActiveTurn,
     switchTurn,
     gameStage,
-    currentRound
-}) {
-    const [isGraveyardVisible, setIsGraveyardVisible] = useState(false);
+    currentRound,
+    isGraveyardVisible,
+    toggleGraveyard
+}) => {
     const [currentIndex, setCurrentIndex] = useState(0);
     const cardsToShow = 6;
     const blankCard = blankCardImage; // Using dynamic blank card
 
-    // Toggle graveyard visibility only if it's the player's own Utilities
-    const toggleGraveyard = () => {
-        if (!isOpponent) {
-            setIsGraveyardVisible(prev => !prev);
-        }
-    };
+    const handleNext = useCallback(() => {
+        setCurrentIndex(prev => Math.min(prev + cardsToShow, deck.length - cardsToShow));
+    }, [deck.length]);
 
-    const handleNext = () => setCurrentIndex(prev => Math.min(prev + cardsToShow, deck.length - cardsToShow));
-    const handlePrevious = () => setCurrentIndex(prev => Math.max(prev - cardsToShow, 0));
+    const handlePrevious = useCallback(() => {
+        setCurrentIndex(prev => Math.max(prev - cardsToShow, 0));
+    }, []);
 
     const graveyardContent = useMemo(() => {
         if (isGraveyardVisible) {
@@ -202,43 +316,16 @@ const Utilities = React.memo(function Utilities({
         </>
     )});
 
-function CardSlots({ cards }) {
-    return (
-        <div className="card-slot my-4">
-            {cards.map((card, index) => (
-                <img key={index} src={card} alt={`Card ${index + 1}`} />
-            ))}
-        </div>
-    );
-}
-
-// Additional Components for Different Stages
-function PreparationStage() {
-    return (
-        <div className="preparation-stage">
-            <h2>Preparation Stage</h2>
-            <p>Get ready for the battle! You have 1 minute to prepare your strategy.</p>
-        </div>
-    );
-}
-
-function EndStage() {
-    return (
-        <div className="end-stage">
-            <h2>Battle Finished</h2>
-            <p>Congratulations! The battle has concluded.</p>
-            {/* You can add more details like results, scores, etc. */}
-        </div>
-    );
-}
-
+/**
+ * Battlefield Component
+ * Main component managing the game state and rendering child components.
+ */
 function Battlefield() {
     // State variables for assets
     const [background, setBackground] = useState('');
     const [leftButton, setLeftButton] = useState('');
     const [rightButton, setRightButton] = useState('');
     const [opponentCards, setOpponentCards] = useState([]);
-    const [opponentDeck, setOpponentDeck] = useState([]);
     const [myCards, setMyCards] = useState([]);
     const [myDeck, setMyDeck] = useState([]);
     const [lastCard, setLastCard] = useState(placeholderCard); // Default last card
@@ -264,8 +351,171 @@ function Battlefield() {
     // State variable to track whose turn it is
     const [currentTurn, setCurrentTurn] = useState('player1'); // 'player1' or 'player2'
 
+    // State variables to manage graveyard visibility
+    const [isOpponentGraveyardVisible, setIsOpponentGraveyardVisible] = useState(false);
+    const [isPlayerGraveyardVisible, setIsPlayerGraveyardVisible] = useState(false);
+
     // useRef to store the interval ID
     const timerRef = useRef(null);
+
+    /**
+     * Function Declarations
+     * All useCallback functions are declared before any useEffect Hooks that use them.
+     */
+
+    // Function to switch turns using Firebase transaction
+    const switchTurn = useCallback(async () => {
+        const gameStateRef = dbRef(database, `rooms/${roomId}/gameState`);
+
+        try {
+            await runTransaction(gameStateRef, (currentGameState) => {
+                if (currentGameState) {
+                    const { currentTurn, currentRound, totalRounds } = currentGameState;
+                    const nextTurn = currentTurn === 'player1' ? 'player2' : 'player1';
+                    let newRound = currentRound;
+
+                    // If switching back to player1, increment the round
+                    if (nextTurn === 'player1') {
+                        newRound += 1;
+                        if (newRound > totalRounds) {
+                            currentGameState.gameStage = 'finished';
+                            currentGameState.timer = 0;
+                            return currentGameState;
+                        } else {
+                            currentGameState.currentRound = newRound;
+                        }
+                    }
+
+                    currentGameState.currentTurn = nextTurn;
+                    currentGameState.timer = 30; // Reset timer for the next player
+
+                    return currentGameState;
+                }
+                return; // Abort the transaction if gameState doesn't exist
+            });
+
+            // Update local state after transaction
+            const gameStateSnapshot = await get(gameStateRef);
+            const updatedGameState = gameStateSnapshot.val();
+            if (updatedGameState) {
+                setGameStage(updatedGameState.gameStage);
+                setTimer(updatedGameState.timer);
+                setCurrentRound(updatedGameState.currentRound);
+                setCurrentTurn(updatedGameState.currentTurn);
+                console.log(`Turn switched to ${updatedGameState.currentTurn}.`);
+                if (updatedGameState.gameStage === 'finished') {
+                    console.log('Game has finished.');
+                }
+            }
+        } catch (error) {
+            console.error('Error switching turn:', error);
+        }
+    }, [roomId]);
+
+    // Function to create a new game room
+    const createRoom = useCallback(async () => {
+        if (!username) {
+            alert('Please enter a username.');
+            return;
+        }
+
+        const newRoomRef = push(dbRef(database, 'rooms'));
+        const newRoomId = newRoomRef.key;
+
+        setRoomId(newRoomId);
+        setPlayerId('player1');
+        setIsRoomJoined(true);
+
+        // Initialize room data with gameStage as 'waiting' and currentTurn as 'player1'
+        await set(newRoomRef, {
+            players: {
+                player1: {
+                    username: username,
+                    deck: myDeck,
+                    graveyard: []
+                }
+            },
+            gameState: {
+                gameStage: 'waiting', // Changed from 'preparation' to 'waiting'
+                timer: 60,
+                currentRound: 0, // Will be set to 1 when both players join
+                totalRounds: totalRounds,
+                currentTurn: 'player1' // Initialize currentTurn
+            },
+            lastCard: lastCard
+        });
+
+        alert(`Room created! Share this Room ID with your opponent: ${newRoomId}`);
+    }, [username, myDeck, lastCard, totalRounds]);
+
+    // Function to join an existing game room
+    const joinRoom = useCallback(async () => {
+        if (!username) {
+            alert('Please enter a username.');
+            return;
+        }
+
+        if (!roomId) {
+            alert('Please enter a valid Room ID.');
+            return;
+        }
+
+        const player2Ref = dbRef(database, `rooms/${roomId}/players/player2`);
+
+        // Check if player2 already exists
+        onValue(player2Ref, async (snapshot) => {
+            if (snapshot.exists()) {
+                alert('Room is already full.');
+            } else {
+                setPlayerId('player2');
+                setIsRoomJoined(true);
+
+                // Add player2 to the room without overwriting existing data
+                await set(player2Ref, {
+                    username: username,
+                    deck: myDeck,
+                    graveyard: []
+                });
+
+                alert('Successfully joined the room!');
+            }
+        }, {
+            onlyOnce: true
+        });
+    }, [username, roomId, myDeck]);
+
+    // Function to update game state in Realtime Database
+    const updateGameState = useCallback((key, value) => {
+        if (roomId) {
+            const gameStateRef = dbRef(database, `rooms/${roomId}/gameState`);
+            update(gameStateRef, { [key]: value });
+        }
+    }, [roomId]);
+
+    // Function to get active player's username based on currentTurn
+    const getActivePlayerUsername = useCallback(() => {
+        if (currentTurn === 'player1') {
+            return player1Username;
+        } else if (currentTurn === 'player2') {
+            return player2Username;
+        } else {
+            return 'Unknown';
+        }
+    }, [currentTurn, player1Username, player2Username]);
+
+    // Memoized toggle functions using useCallback
+    const toggleOpponentGraveyard = useCallback(() => {
+        setIsOpponentGraveyardVisible(prev => !prev);
+    }, []);
+
+    const togglePlayerGraveyard = useCallback(() => {
+        setIsPlayerGraveyardVisible(prev => !prev);
+    }, []);
+
+    /**
+     * useEffect Hooks
+     * All useEffect Hooks that use switchTurn are declared **after** switchTurn is defined.
+     */
 
     // Fetch Firebase assets on component mount
     useEffect(() => {
@@ -304,13 +554,10 @@ function Battlefield() {
                 );
 
                 // Assuming the order corresponds to the card paths
-                setOpponentCards([urls[3],urls[1],urls[2],urls[5],urls[4]]);//opp card
-                setOpponentDeck([blankCardImage,blankCardImage,blankCardImage,blankCardImage,blankCardImage])//for database (opponent)
-
-                setMyCards([urls[0],urls[2],urls[9],urls[2]]);//player cards inventory
-                setMyDeck([blankCardImage,blankCardImage,urls[7],blankCardImage,urls[5]]);//for database
-            
-                setLastCard(urls[0],); // Set initial last card dynamically
+                setOpponentCards([urls[0], placeholderCard, urls[1], placeholderCard, placeholderCard]);
+                setMyCards([placeholderCard, urls[2], placeholderCard, urls[3], urls[4]]);
+                setMyDeck(urls.slice(5, 15));
+                setLastCard(urls[0]); // Set initial last card dynamically
             } catch (error) {
                 console.error('Error fetching Firebase assets:', error);
             }
@@ -390,7 +637,7 @@ function Battlefield() {
                 unsubscribePlayers();
             };
         }
-    }, [isRoomJoined, roomId, playerId]);
+    }, [isRoomJoined, roomId, playerId, updateGameState]);
 
     // Listen to each player's graveyard
     useEffect(() => {
@@ -482,147 +729,10 @@ function Battlefield() {
                 timerRef.current = null;
             }
         };
-    }, [gameStage, timer, currentTurn, playerId]);
-
-    // Function to switch turns using Firebase transaction
-    const switchTurn = async () => {
-        const gameStateRef = dbRef(database, `rooms/${roomId}/gameState`);
-
-        try {
-            await runTransaction(gameStateRef, (currentGameState) => {
-                if (currentGameState) {
-                    const { currentTurn, currentRound, totalRounds } = currentGameState;
-                    const nextTurn = currentTurn === 'player1' ? 'player2' : 'player1';
-                    let newRound = currentRound;
-
-                    // If switching back to player1, increment the round
-                    if (nextTurn === 'player1') {
-                        newRound += 1;
-                        if (newRound > totalRounds) {
-                            currentGameState.gameStage = 'finished';
-                            currentGameState.timer = 0;
-                            return currentGameState;
-                        } else {
-                            currentGameState.currentRound = newRound;
-                        }
-                    }
-
-                    currentGameState.currentTurn = nextTurn;
-                    currentGameState.timer = 30; // Reset timer for the next player
-
-                    return currentGameState;
-                }
-                return; // Abort the transaction if gameState doesn't exist
-            });
-
-            // Update local state after transaction
-            const gameStateSnapshot = await get(gameStateRef);
-            const updatedGameState = gameStateSnapshot.val();
-            if (updatedGameState) {
-                setGameStage(updatedGameState.gameStage);
-                setTimer(updatedGameState.timer);
-                setCurrentRound(updatedGameState.currentRound);
-                setCurrentTurn(updatedGameState.currentTurn);
-                console.log(`Turn switched to ${updatedGameState.currentTurn}.`);
-                if (updatedGameState.gameStage === 'finished') {
-                    console.log('Game has finished.');
-                }
-            }
-        } catch (error) {
-            console.error('Error switching turn:', error);
-        }
-    };
-
-    // Function to create a new game room
-    const createRoom = async () => {
-        if (!username) {
-            alert('Please enter a username.');
-            return;
-        }
-
-        const newRoomRef = push(dbRef(database, 'rooms'));
-        const newRoomId = newRoomRef.key;
-
-        setRoomId(newRoomId);
-        setPlayerId('player1');
-        setIsRoomJoined(true);
-
-        // Initialize room data with gameStage as 'waiting' and currentTurn as 'player1'
-        await set(newRoomRef, {
-            players: {
-                player1: {
-                    username: username,
-                    deck: myDeck,
-                    graveyard: []
-                }
-            },
-            gameState: {
-                gameStage: 'waiting', // Changed from 'preparation' to 'waiting'
-                timer: 60,
-                currentRound: 0, // Will be set to 1 when both players join
-                totalRounds: totalRounds,
-                currentTurn: 'player1' // Initialize currentTurn
-            },
-            lastCard: lastCard
-        });
-
-        alert(`Room created! Share this Room ID with your opponent: ${newRoomId}`);
-    };
-
-    // Function to join an existing game room
-    const joinRoom = async () => {
-        if (!username) {
-            alert('Please enter a username.');
-            return;
-        }
-
-        if (!roomId) {
-            alert('Please enter a valid Room ID.');
-            return;
-        }
-
-        const player2Ref = dbRef(database, `rooms/${roomId}/players/player2`);
-
-        // Check if player2 already exists
-        onValue(player2Ref, async (snapshot) => {
-            if (snapshot.exists()) {
-                alert('Room is already full.');
-            } else {
-                setPlayerId('player2');
-                setIsRoomJoined(true);
-
-                // Add player2 to the room without overwriting existing data
-                await set(player2Ref, {
-                    username: username,
-                    deck: myDeck,
-                    graveyard: []
-                });
-
-                alert('Successfully joined the room!');
-            }
-        }, {
-            onlyOnce: true
-        });
-    };
-
-    // Function to update game state in Realtime Database
-    const updateGameState = (key, value) => {
-        if (roomId) {
-            const gameStateRef = dbRef(database, `rooms/${roomId}/gameState`);
-            update(gameStateRef, { [key]: value });
-        }
-    };
+    }, [gameStage, timer, currentTurn, playerId, switchTurn, updateGameState]);
 
     // Function to get active player's username based on currentTurn
-    const getActivePlayerUsername = () => {
-        if (currentTurn === 'player1') {
-            return player1Username;
-        } else if (currentTurn === 'player2') {
-            return player2Username;
-        } else {
-            return 'Unknown';
-        }
-    };
+    // Already defined earlier using useCallback
 
     // Determine opponent and player graveyards
     const opponentGraveyard = playerId === 'player1' ? player2Graveyard : player1Graveyard;
@@ -677,11 +787,10 @@ function Battlefield() {
                     {gameStage === 'battle' && (
                         <>
                             {/* Opponent's Utilities at the Top */}
-                            <Utilities
-                                key="opponent"
+                            <UtilitiesComponent
                                 isOpponent={true} // Indicates this Utilities is for the opponent
                                 username={opponentUsername || 'Opponent'} // Correct opponent username
-                                deck={playerId === 'player1' ? opponentDeck : myDeck}
+                                deck={playerId === 'player1' ? opponentCards : myCards}
                                 graveyard={opponentGraveyard}
                                 leftBtn={leftButton}
                                 rightBtn={rightButton}
@@ -691,19 +800,20 @@ function Battlefield() {
                                 switchTurn={switchTurn} // Pass the switchTurn function as a prop
                                 gameStage={gameStage} // Pass gameStage for additional logic if needed
                                 currentRound={currentRound} // Pass currentRound for potential use
+                                isGraveyardVisible={isOpponentGraveyardVisible}
+                                toggleGraveyard={toggleOpponentGraveyard}
                             />
 
                             <div className='mid-row'>
                                 <div>
-                                    <CardSlots cards={playerId === 'player1' ? opponentDeck : myDeck} />
-                                    <CardSlots cards={playerId === 'player1' ? myDeck : opponentDeck} />
+                                    <CardSlots cards={playerId === 'player1' ? opponentCards : myCards} />
+                                    <CardSlots cards={playerId === 'player1' ? myCards : opponentCards} />
                                 </div>
                                 <img className='last-card' src={lastCard} alt="Last Card" />
                             </div>
 
                             {/* Player's Utilities at the Bottom */}
-                            <Utilities
-                                key="player"
+                            <UtilitiesComponent
                                 isOpponent={false} // Indicates this Utilities is for the player
                                 username={ownUsername || 'You'} // Correct own username
                                 deck={playerId === 'player1' ? myCards : opponentCards}
@@ -716,6 +826,8 @@ function Battlefield() {
                                 switchTurn={switchTurn} // Pass the switchTurn function as a prop
                                 gameStage={gameStage} // Pass gameStage for additional logic if needed
                                 currentRound={currentRound} // Pass currentRound for potential use
+                                isGraveyardVisible={isPlayerGraveyardVisible}
+                                toggleGraveyard={togglePlayerGraveyard}
                             />
                         </>
                     )}
@@ -726,93 +838,6 @@ function Battlefield() {
                 </>
             )}
         </div>
-    );
+    )}
 
-    // Helper Components Defined Outside the Main Component
-
-    function Timer({ gameStage, timer, currentRound, totalRounds, activePlayer }) {
-        const formatTime = (seconds) => {
-            const mins = Math.floor(seconds / 60);
-            const secs = seconds % 60;
-            return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-        };
-
-        let stageText = '';
-        if (gameStage === 'waiting') {
-            stageText = 'Waiting for Opponent...';
-        } else if (gameStage === 'preparation') {
-            stageText = 'Preparation Stage';
-        } else if (gameStage === 'battle') {
-            stageText = `Turn: ${activePlayer}`;
-        } else if (gameStage === 'finished') {
-            stageText = 'Battle Finished';
-        }
-
-        return (
-            <div className="timer">
-                <p>{stageText}</p>
-                {(gameStage === 'preparation' || gameStage === 'battle') && (
-                    <p>Time Remaining: {formatTime(timer)}</p>
-                )}
-                {gameStage === 'battle' && (
-                    <p>Round {currentRound} of {totalRounds}</p>
-                )}
-            </div>
-        );
-    }
-
-    function WaitingForPlayer({ roomId, playerId }) { // Updated to accept props
-        // Determine if the current player is the room creator
-        const isRoomCreator = playerId === 'player1';
-
-        // Function to copy roomId to clipboard
-        const copyRoomId = () => {
-            navigator.clipboard.writeText(roomId).then(() => {
-                alert('Room ID copied to clipboard!');
-            }).catch((err) => {
-                console.error('Failed to copy Room ID: ', err);
-            });
-        };
-
-        return (
-            <div className="waiting-stage">
-                <h2>Waiting for Opponent...</h2>
-                {isRoomCreator && ( // Only display Room ID for the room creator
-                    <div className="room-id-section">
-                        <p>Your Room ID:</p>
-                        <div className="room-id-display">
-                            <input
-                                type="text"
-                                value={roomId}
-                                readOnly
-                                className="room-id-input"
-                            />
-                            <button onClick={copyRoomId} className="copy-button">Copy</button>
-                        </div>
-                    </div>
-                )}
-                <p>Share the Room ID with your opponent to start the game.</p>
-            </div>
-        );
-    }
-
-    function PreparationStage() {
-        return (
-            <div className="preparation-stage">
-                <h2>Preparation Stage</h2>
-                <p>Get ready for the battle! You have 1 minute to prepare your strategy.</p>
-            </div>
-        );
-    }
-
-    function EndStage() {
-        return (
-            <div className="end-stage">
-                <h2>Battle Finished</h2>
-                <p>Congratulations! The battle has concluded.</p>
-                {/* You can add more details like results, scores, etc. */}
-            </div>
-        );
-    }
-}
     export default Battlefield;
