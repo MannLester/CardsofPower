@@ -1,14 +1,84 @@
 /* PreparationStage.module.css */
-.preparationStage {
+
+.preparationContainer {
+    padding: 20px;
+    text-align: center;
+}
+
+.deckSlots, .handContainer {
+    margin-top: 20px;
+}
+
+.slotsContainer, .handCards {
     display: flex;
-    flex-direction: column;
-    align-items: center;
+    gap: 15px;
     justify-content: center;
-    padding: 2rem;
-    background-color: rgba(0, 0, 0, 0.7);
-    border-radius: 1rem;
+    flex-wrap: wrap;
+}
+
+.slot, .handCard {
+    width: 100px;
+    height: 150px;
+    border: 2px solid #ccc;
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: pointer;
+    position: relative;
+    transition: border-color 0.3s, transform 0.3s;
+}
+
+.slot:hover, .handCard:hover {
+    border-color: #007bff;
+    transform: scale(1.05);
+}
+
+.selectedCard {
+    border-color: #28a745 !important;
+}
+
+.selected {
+    border-color: #ffc107 !important;
+}
+
+.cardImage, .handCardImage {
+    width: 100%;
+    height: 120px;
+    object-fit: cover;
+}
+
+.handCardName, .handCardType {
+    margin: 5px 0;
+    font-size: 0.9em;
+}
+
+.readyButton {
+    margin-top: 30px;
+    padding: 10px 20px;
+    font-size: 1.1em;
+    border: none;
+    border-radius: 5px;
+    background-color: #28a745;
     color: white;
-    font-size: 1.2rem;
-    width: 80%;
-    margin: 2rem auto;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.readyButton:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+.readyButton:not(:disabled):hover {
+    background-color: #218838;
+}
+
+.readyStatus {
+    margin-top: 10px;
+    font-size: 1em;
+    color: #28a745;
+}
+
+.emptyHand {
+    font-style: italic;
+    color: #666;
 }

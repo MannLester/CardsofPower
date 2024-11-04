@@ -1,15 +1,36 @@
 /* CardSlots.module.css */
+
+.cardSlotsContainer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 10px;
+}
+
+.deckTitle {
+    margin-bottom: 10px;
+    color: #fff;
+}
+
 .cardSlot {
     display: flex;
-    margin: 1rem 0;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
 }
 
 .card {
-    width: 120px;
-    height: 160px;
-    margin: 0 0.25rem;
+    width: 100px;
+    height: 150px;
+    border: 2px solid #fff;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(255, 255, 255, 0.2);
     cursor: pointer;
-    transition: transform 0.3s ease, border 0.3s ease;
+    transition: transform 0.2s;
 }
 
 .card:hover {
@@ -17,5 +38,17 @@
 }
 
 .selected {
-    border: 3px solid blue;
+    border-color: yellow;
+    box-shadow: 0 0 10px yellow;
+}
+
+.dimmed {
+    opacity: 0.6;
+}
+
+.cardImage {
+    width: 80px;
+    height: 120px;
+    object-fit: cover;
+    border-radius: 4px;
 }
