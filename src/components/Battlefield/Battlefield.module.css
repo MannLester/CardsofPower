@@ -12,6 +12,7 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    overflow: hidden;
 }
 
 /* Lobby Styles */
@@ -34,6 +35,7 @@
     border-radius: 0.25rem;
     width: 15rem;
     font-size: 1rem;
+    color: black;
 }
 
 .roomActions {
