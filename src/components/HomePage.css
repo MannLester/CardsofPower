@@ -1,0 +1,62 @@
+#home {
+    background-size: cover;
+    height: 100vh;
+    width: 100vw;
+    position: relative;
+    z-index: 0;
+
+    display: flex;
+    flex-direction: column;
+
+    .overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.85);
+        z-index: 1;
+    }
+
+    > * {
+        z-index: 2;
+    }
+
+    .banners {
+        height: 70%;
+        display: flex;
+        flex-direction: row;
+        justify-content: center;
+
+        a img {
+            height: 100%;
+        }
+
+        img:hover {
+            transform: translateY(1rem);
+        }
+    }
+
+    .links {
+        height: 30%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+
+        a {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;  
+            
+            img {
+                height: 12vh;
+                margin-bottom: 0.5rem;
+                object-fit: contain;
+            }
+    
+            img:hover {
+                transform: scale(1.1);
+            }
+        }
+    }
+}

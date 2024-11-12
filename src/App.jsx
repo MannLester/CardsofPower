@@ -2,6 +2,7 @@ import Battlefield from "./components/Battlefield/Battlefield.jsx";
 import LoginPage from "./components/LoginPage.jsx";
 import HomePage from "./components/HomePage.jsx";
 import InventoryPage from "./components/InventoryPage.jsx";
+import DictionaryPage from "./components/DictionaryPage.jsx";
 import { CardsContext, CardsProvider } from "./components/Battlefield/CardsContext.jsx";
 import './styles/global.css';
 import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
@@ -13,11 +14,11 @@ function App() {
       <Routes>
         {/* Only use for actual implementation */ }
 
-        <Route path="/battlefield" element={<Battlefield />}/>
+        <Route exact path="/battlefield" element={<Battlefield />}/>
         <Route path="/" element={<LoginPage />}/> 
         <Route path="/home" element={<HomePage />}/> 
         <Route path="/inventory" element={<InventoryPage />}/>
-
+        <Route path="/dictionary" element={<DictionaryPage />}/>
         {/* Only use for testing implementation */}
         {/* <Route path="/" element={<Battlefield />}/> */}
       </Routes>
