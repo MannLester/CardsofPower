@@ -1,6 +1,6 @@
 // Battlefield.jsx
 import React, { useState, useEffect, useRef, useCallback, useMemo, useContext } from 'react';
-import { storage, firestore } from '../firebaseConfig'; // Ensure firestore and storage are correctly initialized
+import { storage, firestore } from '../firebaseConfig';
 import {
     collection,
     getDocs,
@@ -23,18 +23,18 @@ import {
 import styles from './Battlefield.module.css';
 
 import blankCardImage from '../../assets/cards/blank.png';
+import backCard from '../../assets/cards/back-card.png';
 
 import Timer from './Timer';
 import WaitingForPlayer from './WaitingForPlayer';
 import PreparationStage from './PreparationStage';
 import EndStage from './EndStage';
 import CardSlots from './CardSlots';
-import UtilitiesComponent from './UtilitiesComponent';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import './ToastStyles.css'; // Import custom toast styles
+import './ToastStyles.css';
 
-import { CardsContext } from './CardsContext'; // Ensure correct path
+import { CardsContext } from './CardsContext';
 
 function Battlefield() {
 
@@ -42,32 +42,33 @@ function Battlefield() {
      * State Variables
      */
 
-    // State variables for assets
+    // Asset state variables
     const [background, setBackground] = useState('');
     const [leftButton, setLeftButton] = useState('');
     const [rightButton, setRightButton] = useState('');
-    const [assetsLoaded, setAssetsLoaded] = useState(false); // Track if assets are loaded
+    const [assetsLoaded, setAssetsLoaded] = useState(false);
 
     // Multiplayer state variables
     const [roomId, setRoomId] = useState('');
-    const [playerId, setPlayerId] = useState(''); // 'player1' or 'player2'
+    const [playerId, setPlayerId] = useState('');
     const [username, setUsername] = useState('');
     const [isRoomJoined, setIsRoomJoined] = useState(false);
-    const [gameStage, setGameStage] = useState('lobby'); // 'lobby', 'waiting', 'preparation', 'battle', 'finished'
-    const [timer, setTimer] = useState(120); // Updated to 2 minutes preparation
+    const [gameStage, setGameStage] = useState('lobby');
+    const [timer, setTimer] = useState(120);
     const [currentRound, setCurrentRound] = useState(0);
-    const totalRounds = 5;
-
-    // Separate state variables for player usernames
-    const [player1Username, setPlayer1Username] = useState('');
-    const [player2Username, setPlayer2Username] = useState('');
-
-    // State variables for each player's graveyard
+    const [opponentId, setOpponentId] = useState('');
     const [player1Graveyard, setPlayer1Graveyard] = useState([]);
     const [player2Graveyard, setPlayer2Graveyard] = useState([]);
+    const opponentGraveyard = playerId === 'player1' ? player2Graveyard : player1Graveyard;
+    const playerGraveyard = playerId === 'player1' ? player1Graveyard : player2Graveyard;
+    const [player1Username, setPlayer1Username] = useState('');
+    const [player2Username, setPlayer2Username] = useState('');
+    const opponentUsername = playerId === 'player1' ? player2Username : player1Username;
+    const ownUsernameDisplay = playerId === 'player1' ? player1Username : player2Username;
+    const totalRounds = 5;
 
     // State to track whose turn it is
-    const [currentTurn, setCurrentTurn] = useState('player1'); // 'player1' or 'player2'
+    const [currentTurn, setCurrentTurn] = useState('player1');
 
     // State variables to manage graveyard visibility
     const [isOpponentGraveyardVisible, setIsOpponentGraveyardVisible] = useState(false);
@@ -93,19 +94,27 @@ function Battlefield() {
     const [opponentDeck, setOpponentDeck] = useState([]);
 
     // Last Card Played
-    const [lastCard, setLastCard] = useState(null); // Single lastCard state
-    const [lastCardOwner, setLastCardOwner] = useState(''); // Optional: To track who played the last card
+    const [lastCard, setLastCard] = useState(null);
+    const [lastCardOwner, setLastCardOwner] = useState('');
 
     // State to track readiness
     const [playerReady, setPlayerReady] = useState(false);
     const [opponentReady, setOpponentReady] = useState(false);
 
     // Timer and Phase Management
-    const [preparationTimer, setPreparationTimer] = useState(120); // 2 minutes preparation
-    const [battleTimer, setBattleTimer] = useState(60); // 1 minute battle turn
+    const [preparationTimer, setPreparationTimer] = useState(120);
+    const [battleTimer, setBattleTimer] = useState(60);
 
     // Accessing cards data from CardsContext
     const { cards, loading: cardsLoading, error: cardsError } = useContext(CardsContext);
+
+    // New State for Winner and Player HP
+    const [winner, setWinner] = useState(null);
+    const [playerHP, setPlayerHP] = useState(100);
+    const [opponentHP, setOpponentHP] = useState(100);
+
+    // New State for Attack Flow
+    const [attackSourceCard, setAttackSourceCard] = useState(null);
 
     /**
      * Helper Functions
@@ -121,74 +130,30 @@ function Battlefield() {
 
     /**
      * Function Declarations
-     * All useCallback functions are declared after helper functions.
      */
 
-    // **Updated Function: Check if all required Monster/Trap cards have been placed**
-    const hasPlacedAllRequiredCards = useCallback(() => {
-        // Count remaining Monster/Trap cards in the player's hand
-        const remainingRequiredCards = myCards.filter(card => card.cardType === 'monster' || card.cardType === 'trap').length;
-        console.log(`Remaining Monster/Trap cards in hand: ${remainingRequiredCards}`);
-        return remainingRequiredCards === 0;
-    }, [myCards]);
-
-    // **New Function: Check if player has any Spell cards in hand**
-    const hasSpellCardsInHand = useCallback(() => {
-        return myCards.some(card => card.cardType === 'spell');
-    }, [myCards]);
-
-    // **New Function: Handle Spell Card Usage**
-    const handleSpellUsage = useCallback(async (spellCard) => {
-        if (gameStage !== 'battle') {
-            toast.warn('You can only use Spell cards during the Battle phase.');
-            return;
-        }
-
-        if (!isActiveTurnFlag) {
-            toast.warn("It's not your turn!");
-            return;
-        }
-
-        try {
-            // Implement spell effect based on spellCard.cardName or other properties
-            // For demonstration, let's assume we have a "Heal" spell that restores HP
-            switch (spellCard.cardName.toLowerCase()) {
-                case 'heal':
-                    // Example: Restore HP to the player
-                    // This requires additional state variables for HP, which are not currently defined
-                    // Implement the logic as per your game's rules
-                    toast.success('Heal spell used! (Effect not implemented)');
-                    console.log('Heal spell used.');
-                    break;
-                // Add more spell cases here
-                default:
-                    toast.warn('Unknown spell effect.');
-                    console.warn(`Spell effect for ${spellCard.cardName} not defined.`);
+    // Function to determine the winner
+    const determineWinner = useCallback(() => {
+        if (playerHP <= 0 && opponentHP > 0) {
+            setWinner(opponentUsername);
+        } else if (opponentHP <= 0 && playerHP > 0) {
+            setWinner(ownUsernameDisplay);
+        } else if (playerHP <= 0 && opponentHP <= 0) {
+            setWinner('Draw');
+        } else if (currentRound > totalRounds) {
+            if (playerHP > opponentHP) {
+                setWinner(ownUsernameDisplay);
+            } else if (opponentHP > playerHP) {
+                setWinner(opponentUsername);
+            } else {
+                setWinner('Draw');
             }
-
-            // After using the spell, remove it from hand and move to graveyard
-            // Remove from Firestore hand
-            const handDocRef = doc(firestore, `rooms/${roomId}/players/${playerId}/hand`, spellCard.id);
-            await deleteDoc(handDocRef);
-
-            // Add to graveyard
-            const graveyardRef = collection(firestore, `rooms/${roomId}/players/${playerId}/graveyard`);
-            await addDoc(graveyardRef, spellCard);
-
-            // Update local state
-            setMyCards(prevCards => prevCards.filter(card => card.id !== spellCard.id));
-            toast.success(`Used spell card: ${spellCard.cardName}`);
-            console.log(`Used spell card: ${spellCard.cardName}`);
-
-        } catch (error) {
-            console.error('Error using spell card:', error);
-            toast.error('Failed to use spell card.');
         }
-    }, [gameStage, isActiveTurnFlag, roomId, playerId, firestore]);
+    }, [playerHP, opponentHP, opponentUsername, ownUsernameDisplay, currentRound, totalRounds]);
 
     // Function to switch turns using Firestore transaction
     const switchTurn = useCallback(async () => {
-        const roomDocRef = doc(firestore, 'rooms', roomId); // Correct reference
+        const roomDocRef = doc(firestore, 'rooms', roomId);
         const gameStateField = 'gameState';
 
         try {
@@ -227,7 +192,7 @@ function Battlefield() {
 
                 transaction.update(roomDocRef, {
                     [`${gameStateField}.currentTurn`]: nextTurn,
-                    [`${gameStateField}.timer`]: 30, // Reset timer for the next player
+                    [`${gameStateField}.timer`]: 60, // Reset timer for the next player
                 });
             });
 
@@ -244,6 +209,7 @@ function Battlefield() {
                 if (updatedGameState.gameStage === 'finished') {
                     console.log('Game has finished.');
                     toast.info('Game has finished.');
+                    determineWinner(); // Call function to determine the winner
                 }
 
                 // Reset hasPlacedCard for the new active player
@@ -256,46 +222,296 @@ function Battlefield() {
             console.error('Error switching turn:', error);
             toast.error('Failed to switch turn.');
         }
-    }, [roomId, firestore]);
+    }, [roomId, firestore, determineWinner]);
 
-    /**
-     * Function to handle the player marking themselves as ready
-     */
-    const handleReady = useCallback(async () => {
-        if (!isRoomJoined || !roomId || !playerId) {
-            toast.warn('You must join a room first.');
+    // Function to check if all required Monster/Trap cards have been placed
+    const hasPlacedAllRequiredCards = useCallback(() => {
+        const remainingRequiredCards = myCards.filter(card => card.cardType === 'monster' || card.cardType === 'trap').length;
+        console.log(`Remaining Monster/Trap cards in hand: ${remainingRequiredCards}`);
+        return remainingRequiredCards === 0;
+    }, [myCards]);
+
+    // Function to handle spell card usage
+    const handleSpellUsage = useCallback(async (spellCard) => {
+        if (gameStage !== 'battle') {
+            toast.warn('You can only use Spell cards during the Battle phase.');
             return;
         }
 
-        // **Updated Check: Ensure all required Monster/Trap cards have been placed**
-        if (!hasPlacedAllRequiredCards()) {
-            toast.warn('Please place all your Monster and Trap cards before readying up.');
+        if (!isActiveTurnFlag) {
+            toast.warn("It's not your turn!");
             return;
         }
 
         try {
-            const playerDocRef = doc(firestore, `rooms/${roomId}/players/${playerId}`);
-            await setDoc(playerDocRef, {
-                hasPlacedCard: true
-            }, { merge: true });
+            switch (spellCard.cardName.toLowerCase()) {
+                case 'heal':
+                    // Example: Restore 20 HP to the player
+                    setPlayerHP(prevHP => Math.min(prevHP + 20, 100));
+                    toast.success('Heal spell used! Restored 20 HP.');
+                    console.log('Heal spell used.');
+                    break;
+                // Add more spell cases here
+                default:
+                    toast.warn('Unknown spell effect.');
+                    console.warn(`Spell effect for ${spellCard.cardName} not defined.`);
+            }
 
-            setPlayerReady(true);
+            // Remove spell card from hand and add to graveyard
+            const handDocRef = doc(firestore, 'rooms', roomId, 'players', playerId, 'hand', spellCard.id);
+            await deleteDoc(handDocRef);
 
-            toast.success('You are ready.');
+            const graveyardRef = collection(firestore, 'rooms', roomId, 'players', playerId, 'graveyard');
+            await addDoc(graveyardRef, spellCard);
+
+            // Update local state
+            setMyCards(prevCards => prevCards.filter(card => card.id !== spellCard.id));
+            toast.success(`Used spell card: ${spellCard.cardName}`);
+            console.log(`Used spell card: ${spellCard.cardName}`);
+
         } catch (error) {
-            console.error('Error setting ready:', error);
-            toast.error('Failed to mark as ready.');
+            console.error('Error using spell card:', error);
+            toast.error('Failed to use spell card.');
         }
-    }, [isRoomJoined, roomId, playerId, firestore, hasPlacedAllRequiredCards]);
+    }, [gameStage, isActiveTurnFlag, roomId, playerId, firestore]);
 
-    /**
-     * Function Declarations for Creating and Joining Rooms
-     */
+    // Handle Attack Initiation
+    const handleAttackInitiation = useCallback(async () => {
+        // Debugging: Log the current selectedCard
+        console.log('Attempting to initiate attack with selectedCard:', selectedCard);
+
+        // Check if selectedCard and its nested properties are defined
+        if (!selectedCard || !selectedCard.card || !selectedCard.card.id) {
+            toast.error('No valid card selected for attack.');
+            console.error('Selected card is invalid:', selectedCard);
+            return;
+        }
+
+        if (selectedCard.card.cardType !== 'monster') { // assuming only monster cards can attack
+            toast.warn('Please select a Monster card to attack with.');
+            return;
+        }
+
+        try {
+            const cardId = selectedCard.card.id;
+            const cardDocRef = doc(firestore, 'cards', cardId);
+            const cardDocSnap = await getDoc(cardDocRef);
+
+            if (!cardDocSnap.exists()) {
+                toast.error('Selected card does not exist in the cards collection.');
+                console.error('Selected card document does not exist for cardId:', cardId);
+                return;
+            }
+
+            const cardData = cardDocSnap.data();
+            const attackPts = cardData.atkPts;
+
+            if (attackPts === undefined || attackPts === null) {
+                toast.error('Selected card does not have attack points defined.');
+                console.error('attackPts is undefined or null for the selected card:', cardData);
+                return;
+            }
+
+            setAttackSourceCard({
+                ...selectedCard,
+                attackPts
+            });
+            toast.info(`Selected ${selectedCard.card.cardName} to attack with (Attack Points: ${attackPts}). Choose an opponent's card to attack.`);
+            console.log(`Selected ${selectedCard.card.cardName} to attack with (Attack Points: ${attackPts}).`);
+        } catch (error) {
+            console.error('Error fetching attackPts:', error);
+            toast.error('Failed to fetch attack points for the selected card.');
+        }
+    }, [selectedCard, firestore]);
+
+    // Handle Target Selection for Attack
+    const handleTargetSelection = useCallback(async (targetIndex) => {
+        if (!attackSourceCard) {
+            toast.warn('No attack source selected.');
+            return;
+        }
+
+        const targetCard = opponentDeck[targetIndex];
+        if (!targetCard || targetCard.cardType === null) {
+            // Direct attack
+            const damage = attackSourceCard.attackPts; // Use fetched attackPts
+            try {
+                await runTransaction(firestore, async (transaction) => {
+                    const opponentDocRef = doc(firestore, 'rooms', roomId, 'players', opponentId);
+                    const opponentDoc = await transaction.get(opponentDocRef);
+                    if (!opponentDoc.exists()) {
+                        throw new Error('Opponent does not exist.');
+                    }
+
+                    const currentOpponentHP = opponentDoc.data().hp || 100;
+                    const newOpponentHP = currentOpponentHP - damage;
+                    transaction.update(opponentDocRef, { hp: Math.max(newOpponentHP, 0) });
+                });
+                setOpponentHP(prevHP => Math.max(prevHP - damage, 0));
+                toast.success(`Direct attack! Dealt ${damage} damage to ${opponentUsername}.`);
+                console.log(`Direct attack! Dealt ${damage} damage to ${opponentUsername}.`);
+            } catch (error) {
+                console.error('Error performing direct attack:', error);
+                toast.error('Failed to perform attack.');
+            }
+        } else {
+            // Attack the target card
+            const damage = attackSourceCard.attackPts; // Use fetched attackPts
+            const targetDefense = targetCard.position === 'defense' ? 5 : 0; // Example: defense reduces damage
+            const actualDamage = Math.max(damage - targetDefense, 0);
+
+            if (actualDamage > 0) {
+                try {
+                    await runTransaction(firestore, async (transaction) => {
+                        // **Rearranged to perform all reads first**
+
+                        // Read roomDocRef and targetDocRef first
+                        const roomDocRef = doc(firestore, 'rooms', roomId);
+                        const roomDoc = await transaction.get(roomDocRef);
+                        if (!roomDoc.exists()) {
+                            throw new Error('Room does not exist!');
+                        }
+
+                        const targetDocRef = doc(firestore, 'rooms', roomId, 'players', opponentId, 'deck', targetIndex.toString());
+                        const targetDoc = await transaction.get(targetDocRef);
+                        if (!targetDoc.exists()) {
+                            throw new Error('Target card does not exist.');
+                        }
+
+                        const targetCardData = targetDoc.data();
+                        const currentTargetHP = targetCardData.hp || 20;
+                        const newTargetHP = currentTargetHP - actualDamage;
+
+                        if (newTargetHP <= 0) {
+                            // Move to graveyard
+                            const graveyardRef = collection(firestore, 'rooms', roomId, 'players', opponentId, 'graveyard');
+                            await addDoc(graveyardRef, { ...targetCardData });
+                            // Remove the card from deck and clear its data including 'id'
+                            transaction.update(targetDocRef, {
+                                id: null, // Clear the 'id' field
+                                imageUrl: blankCardImage,
+                                cardType: null,
+                                cardName: '',
+                                position: 'attack',
+                                hp: null
+                            });
+
+                            // **New Functionality: Decrease Opponent's HP by 20 when a card is destroyed**
+                            const roomData = roomDoc.data();
+                            const opponentHPField = playerId === 'player1' ? 'player2' : 'player1';
+                            const currentOpponentHP = roomData.hp[opponentHPField] || 100;
+                            const newOpponentHP = currentOpponentHP - 20;
+                            transaction.update(roomDocRef, {
+                                [`hp.${opponentHPField}`]: Math.max(newOpponentHP, 0)
+                            });
+
+                            // **Note:** Toasts should not be called inside transactions
+                        } else {
+                            transaction.update(targetDocRef, { hp: newTargetHP });
+                            // Toasts should not be called inside transactions
+                        }
+                    });
+
+                    // Update local opponentDeck
+                    setOpponentDeck(prevDeck => {
+                        const updatedDeck = [...prevDeck];
+                        if (updatedDeck[targetIndex]) {
+                            if ((updatedDeck[targetIndex].hp || 20) - actualDamage <= 0) {
+                                updatedDeck[targetIndex] = {
+                                    id: null, // Clear the 'id'
+                                    imageUrl: blankCardImage,
+                                    cardType: null,
+                                    cardName: '',
+                                    position: 'attack',
+                                    hp: null
+                                };
+                            } else {
+                                updatedDeck[targetIndex].hp = (updatedDeck[targetIndex].hp || 20) - actualDamage;
+                            }
+                        }
+                        return updatedDeck;
+                    });
+
+                    // **New Functionality: Update Opponent's HP in Local State**
+                    setOpponentHP(prevHP => Math.max(prevHP - 20, 0));
+                    toast.success(`${opponentUsername}'s ${opponentDeck[targetIndex].cardName} was destroyed! Opponent loses 20 HP.`);
+                } catch (error) {
+                    console.error('Error attacking target card:', error);
+                    toast.error('Failed to attack target card.');
+                }
+            } else {
+                toast.info('Attack was not strong enough to damage the target.');
+            }
+        }
+
+        // After attack, switch turn
+        await switchTurn();
+
+        // Reset attackSourceCard
+        setAttackSourceCard(null);
+    }, [attackSourceCard, opponentDeck, firestore, roomId, opponentId, opponentUsername, switchTurn]);
+
+    // Handle Defend Action
+    const handleDefend = useCallback(async () => {
+        if (gameStage !== 'battle') {
+            toast.warn('You can only defend during the Battle phase.');
+            return;
+        }
+
+        if (!isActiveTurnFlag) {
+            toast.warn("It's not your turn!");
+            return;
+        }
+
+        if (!selectedCard || selectedCard.source !== 'deck') {
+            toast.warn('Please select a card from your deck to defend with.');
+            return;
+        }
+
+        const index = selectedCard.index;
+
+        try {
+            // Reference to the selected card's slot in Firestore
+            const slotDocRef = doc(firestore, 'rooms', roomId, 'players', playerId, 'deck', index.toString());
+
+            // Update the card's position to 'defense' in Firestore
+            await updateDoc(slotDocRef, {
+                position: 'defense'
+            });
+
+            // Update the local state to reflect the position change
+            const updatedDeck = [...myDeck];
+            if (updatedDeck[index]) {
+                updatedDeck[index].position = 'defense';
+            }
+            setMyDeck(updatedDeck);
+            console.log(`Defended with ${updatedDeck[index].cardName} in slot ${index + 1}.`);
+
+            // Provide user feedback
+            toast.success(`Defended with ${updatedDeck[index].cardName} in slot ${index + 1}.`);
+
+            // Reset selected card
+            setSelectedCard(null);
+        } catch (error) {
+            console.error('Error during defend:', error);
+            toast.error('Failed to perform defend action.');
+        }
+    }, [gameStage, isActiveTurnFlag, selectedCard, myDeck, roomId, playerId, firestore]);
 
     // Function to handle creating a new room
     const handleCreateRoom = useCallback(async () => {
         if (!username.trim()) {
             toast.warn('Please enter a username.');
+            return;
+        }
+
+        if (!assetsLoaded) {
+            toast.warn('Assets are still loading. Please wait.');
+            return;
+        }
+
+        if (cardsLoading) {
+            toast.warn('Cards are still loading. Please wait.');
             return;
         }
 
@@ -359,44 +575,54 @@ function Battlefield() {
                 attacks: {
                     player1: Array(5).fill(null),
                     player2: Array(5).fill(null)
+                },
+                hp: {
+                    player1: 100,
+                    player2: 100
                 }
             });
 
             const newRoomId = newRoomRef.id;
             setRoomId(newRoomId);
             setPlayerId('player1');
+            setOpponentId('player2');
             setIsRoomJoined(true);
+            setGameStage('waiting');
 
             // Initialize player1's data
-            const player1DocRef = doc(firestore, `rooms/${newRoomId}/players`, 'player1');
+            const player1DocRef = doc(firestore, 'rooms', newRoomId, 'players', 'player1');
             await setDoc(player1DocRef, {
                 username: username.trim(),
-                deck: [], // Will be initialized below
+                deck: [],
                 graveyard: [],
                 hasPlacedCard: false,
                 lastCard: null
             });
 
-            // Initialize player1's deck with 5 blank slots
-            const player1DeckRef = collection(firestore, `rooms/${newRoomId}/players/player1/deck`);
+            // Initialize player1's deck with 5 blank slots, including 'id': null
+            const player1DeckRef = collection(firestore, 'rooms', newRoomId, 'players', 'player1', 'deck');
             const deckPromises = [];
             for (let i = 0; i < 5; i++) {
                 const slotDocRef = doc(player1DeckRef, i.toString());
                 deckPromises.push(setDoc(slotDocRef, {
+                    id: null, // Initialize 'id' as null
                     imageUrl: blankCardImage,
                     cardType: null,
                     cardName: '',
+                    position: 'attack',
+                    hp: null // Set HP to null for empty slots
                 }, { merge: true }));
             }
             await Promise.all(deckPromises);
 
             // Initialize player1's hand in the hand subcollection
-            const player1HandRef = collection(firestore, `rooms/${newRoomId}/players/player1/hand`);
+            const player1HandRef = collection(firestore, 'rooms', newRoomId, 'players', 'player1', 'hand');
             const handPromises = userCards.map(card => addDoc(player1HandRef, {
-                id: card.id, // Store card ID for reference
+                id: card.id,
                 imageUrl: card.imageUrl,
                 cardType: card.cardType,
                 cardName: card.cardName,
+                hp: card.hp || 20 // Ensure HP is set
             }));
             await Promise.all(handPromises);
 
@@ -406,7 +632,7 @@ function Battlefield() {
             console.error('Error creating room:', error);
             toast.error('Failed to create room. Please try again.');
         }
-    }, [username, firestore, totalRounds, cards]);
+    }, [username, firestore, totalRounds, cards, cardsLoading, assetsLoaded]);
 
     // Function to handle joining an existing room
     const handleJoinRoom = useCallback(async () => {
@@ -417,6 +643,16 @@ function Battlefield() {
 
         if (!roomId.trim()) {
             toast.warn('Please enter a Room ID to join.');
+            return;
+        }
+
+        if (!assetsLoaded) {
+            toast.warn('Assets are still loading. Please wait.');
+            return;
+        }
+
+        if (cardsLoading) {
+            toast.warn('Cards are still loading. Please wait.');
             return;
         }
 
@@ -481,14 +717,21 @@ function Battlefield() {
             const roomData = roomSnap.data();
 
             // Check if player2 is already present
-            if (roomData.players && roomData.players.player2 && roomData.players.player2.username) {
+            const playersCollection = collection(firestore, 'rooms', roomId, 'players');
+            const playersSnapshot = await getDocs(playersCollection);
+            const players = {};
+            playersSnapshot.forEach(doc => {
+                players[doc.id] = doc.data();
+            });
+
+            if (players.player2 && players.player2.username) {
                 toast.error('Room is already full.');
                 console.error('Room is already full.');
                 return;
             }
 
-            // Add player2 to the room as a separate document
-            const player2DocRef = doc(firestore, `rooms/${roomId}/players`, 'player2');
+            // Add player2 to the room
+            const player2DocRef = doc(firestore, 'rooms', roomId, 'players', 'player2');
             await setDoc(player2DocRef, {
                 username: username.trim(),
                 deck: [],
@@ -498,28 +741,34 @@ function Battlefield() {
             }, { merge: true });
 
             setPlayerId('player2');
+            setOpponentId('player1');
             setIsRoomJoined(true);
+            setGameStage('preparation');
 
-            // Initialize player2's deck with 5 blank slots
-            const player2DeckRef = collection(firestore, `rooms/${roomId}/players/player2/deck`);
+            // Initialize player2's deck with 5 blank slots, including 'id': null
+            const player2DeckRef = collection(firestore, 'rooms', roomId, 'players', 'player2', 'deck');
             const deckPromises = [];
             for (let i = 0; i < 5; i++) {
                 const slotDocRef = doc(player2DeckRef, i.toString());
                 deckPromises.push(setDoc(slotDocRef, {
+                    id: null, // Initialize 'id' as null
                     imageUrl: blankCardImage,
                     cardType: null,
                     cardName: '',
+                    position: 'attack',
+                    hp: null // Set HP to null for empty slots
                 }, { merge: true }));
             }
             await Promise.all(deckPromises);
 
             // Initialize player2's hand in the hand subcollection
-            const player2HandRef = collection(firestore, `rooms/${roomId}/players/player2/hand`);
+            const player2HandRef = collection(firestore, 'rooms', roomId, 'players', 'player2', 'hand');
             const handPromises = userCards.map(card => addDoc(player2HandRef, {
-                id: card.id, // Store card ID for reference
+                id: card.id,
                 imageUrl: card.imageUrl,
                 cardType: card.cardType,
                 cardName: card.cardName,
+                hp: card.hp || 20 // Ensure HP is set
             }));
             await Promise.all(handPromises);
 
@@ -537,23 +786,40 @@ function Battlefield() {
             console.error('Error joining room:', error);
             toast.error('Failed to join room. Please check Room ID and try again.');
         }
-    }, [username, roomId, firestore, cards]);
+    }, [username, roomId, firestore, cards, cardsLoading, assetsLoaded]);
 
-    /**
-     * Function to handle slot clicks
-     */
+    // Function to handle slot clicks
     const handleSlotClick = useCallback(async (index) => {
-        if (gameStage !== 'preparation') return; // Only allow actions during preparation
-
-        // Ensure a card is selected
-        if (!selectedCard) {
-            toast.warn('Please select a card from your hand to place.');
+        if (gameStage !== 'preparation' && gameStage !== 'battle') {
+            toast.warn('Cannot place cards at this stage.');
             return;
         }
 
-        // Validate card type
-        if (selectedCard.card.cardType !== 'monster' && selectedCard.card.cardType !== 'trap') {
-            toast.error('Only Monster and Trap cards can be placed in the slots.');
+        if (gameStage === 'battle' && !isActiveTurnFlag && !attackSourceCard) {
+            toast.warn("It's not your turn!");
+            return;
+        }
+
+        if (gameStage === 'battle' && hasPlacedCard && !attackSourceCard) {
+            toast.warn('You have already placed a card this turn.');
+            return;
+        }
+
+        // If in attack mode, and the slot is opponent's, handle attack
+        if (attackSourceCard && isOpponentSlot(index)) {
+            handleTargetSelection(index);
+            return;
+        }
+
+        // Ensure a card is selected
+        if (!selectedCard) {
+            toast.warn('Please select a card to place or defend with.');
+            return;
+        }
+
+        // Validate card type based on game stage
+        if (gameStage === 'preparation' && !['monster', 'trap'].includes(selectedCard.card.cardType)) {
+            toast.error('Only Monster and Trap cards can be placed in the slots during preparation.');
             return;
         }
 
@@ -564,182 +830,130 @@ function Battlefield() {
         }
 
         try {
-            // Update Firestore: set the card in the slot
-            const slotDocRef = doc(firestore, `rooms/${roomId}/players/${playerId}/deck`, index.toString());
+            // Update Firestore: set the card in the slot, including 'id'
+            const slotDocRef = doc(firestore, 'rooms', roomId, 'players', playerId, 'deck', index.toString());
             await setDoc(slotDocRef, {
-                imageUrl: selectedCard.card.imageUrl, // This should be the Storage path
+                id: selectedCard.card.id, // **Include the 'id' of the selected card**
+                imageUrl: selectedCard.card.imageUrl,
                 cardType: selectedCard.card.cardType,
                 cardName: selectedCard.card.cardName,
-                // Add other necessary card properties
+                position: 'attack',
+                slotIndex: index, // Include slotIndex
+                hp: selectedCard.card.hp || 20 // Set HP
             }, { merge: true });
 
-            // Remove the card from Firestore's hand subcollection
-            const handDocRef = doc(firestore, `rooms/${roomId}/players/${playerId}/hand`, selectedCard.card.id);
-            await deleteDoc(handDocRef); // Ensure deleteDoc is imported from 'firebase/firestore'
-
-            // Update local state
-            const updatedDeck = [...myDeck];
-            updatedDeck[index] = selectedCard.card;
-            setMyDeck(updatedDeck);
-            console.log(`Placed ${selectedCard.card.cardName} in slot ${index + 1}. Updated myDeck:`, updatedDeck);
-
-            // Remove the card from the hand
-            const updatedMyCards = myCards.filter(card => card.id !== selectedCard.card.id);
-            setMyCards(updatedMyCards);
-            console.log('Updated myCards after placement:', updatedMyCards);
-
-            // **Removed Premature Readiness State Updates**
-            /*
-            // Set hasPlacedCard to true in Firestore
-            const playerDocRef = doc(firestore, `rooms/${roomId}/players/${playerId}`);
-            await setDoc(playerDocRef, {
-                hasPlacedCard: true
-            }, { merge: true });
-
-            // Update local readiness state
-            setPlayerReady(true);
-            */
-
-            // **Only reset selected card**
-            setSelectedCard(null);
-
-            toast.success(`Placed ${selectedCard.card.cardName} in slot ${index + 1}.`);
-        } catch (error) {
-            console.error('Error placing card:', error);
-            toast.error('Failed to place card.');
-        }
-    }, [gameStage, selectedCard, myDeck, myCards, roomId, playerId, firestore]);
-
-    /**
-     * Function to handle card selection from hand
-     */
-    const handleCardSelection = (card, index) => {
-        if (card) {
-            setSelectedCard({ card, index }); // Save selected card and index
-            toast.info(`Selected ${card.cardName} for placement.`);
-            console.log(`Selected card: ${card.cardName} at index ${index}`);
-        }
-    };
-
-    /**
-     * Function to handle attack action
-     */
-    const handleAttack = useCallback(async () => {
-        if (!isActiveTurnFlag) {
-            toast.warn("It's not your turn!");
-            return;
-        }
-
-        if (!lastCard) {
-            toast.warn('No card selected for attack.');
-            return;
-        }
-
-        try {
-            console.log(`${username} is attacking with ${lastCard.cardName}`);
-
-            // Reference to the room document
-            const roomRef = doc(firestore, 'rooms', roomId);
-
-            // Add lastCard to graveyard
-            const graveyardRef = collection(firestore, `rooms/${roomId}/players/${playerId}/graveyard`);
-            await addDoc(graveyardRef, lastCard);
-
-            // Remove the card from the deck
-            const deckIndex = myDeck.findIndex(card => card.imageUrl === lastCard.imageUrl);
-            if (deckIndex !== -1) {
-                const deckDocRef = doc(firestore, `rooms/${roomId}/players/${playerId}/deck`, deckIndex.toString());
-                await setDoc(deckDocRef, {
-                    imageUrl: blankCardImage,
-                    cardType: null,
-                    cardName: '',
-                }, { merge: true });
-
-                // Update local deck state
-                const updatedDeck = [...myDeck];
-                updatedDeck[deckIndex] = {
-                    imageUrl: blankCardImage,
-                    cardType: null,
-                    cardName: '',
-                };
-                setMyDeck(updatedDeck);
-                console.log(`Removed ${lastCard.cardName} from deck slot ${deckIndex + 1}. Updated deck:`, updatedDeck);
-            }
-
-            // Add the attack to the 'attacks' collection with the owner field
-            const attacksRef = collection(firestore, 'rooms', roomId, 'attacks');
-            await addDoc(attacksRef, {
-                card: lastCard,
-                owner: playerId, // 'player1' or 'player2'
-                timestamp: new Date(), // Or use Firestore serverTimestamp if needed
-            });
-
-            // Update lastCard both locally and in Firestore
-            await updateDoc(roomRef, {
+            // Update lastCard in Firestore
+            const lastCardRef = doc(firestore, 'rooms', roomId);
+            await updateDoc(lastCardRef, {
                 lastCard: {
-                    card: lastCard,
-                    owner: playerId // Track who played the card
+                    card: { ...selectedCard.card, slotIndex: index, hp: selectedCard.card.hp || 20 },
+                    owner: playerId
                 }
             });
 
             // Update local state
-            setLastCard(lastCard);
-            setLastCardOwner(username);
-            console.log(`Attack performed with ${lastCard.cardName}. Last card updated.`);
+            const updatedDeck = [...myDeck];
+            updatedDeck[index] = { ...selectedCard.card, position: 'attack', slotIndex: index, hp: selectedCard.card.hp || 20, id: selectedCard.card.id }; // **Include 'id'**
+            setMyDeck(updatedDeck);
 
-            // Switch turn after attack
-            await switchTurn();
+            const updatedMyCards = myCards.filter(card => card.id !== selectedCard.card.id);
+            setMyCards(updatedMyCards);
 
-            // Set hasPlacedCard to false for the next player
-            const playerDocRef = doc(firestore, `rooms/${roomId}/players/${playerId}`);
+            // Remove the card from the hand in Firestore
+            const handDocRef = doc(firestore, 'rooms', roomId, 'players', playerId, 'hand', selectedCard.card.id);
+            await deleteDoc(handDocRef);
+
+            // Set hasPlacedCard to true if in battle phase
+            if (gameStage === 'battle') {
+                const playerDocRef = doc(firestore, 'rooms', roomId, 'players', playerId);
+                await updateDoc(playerDocRef, { hasPlacedCard: true });
+                setHasPlacedCard(true);
+            }
+
+            // Reset selected card
+            setSelectedCard(null);
+
+            toast.success(`Placed ${selectedCard.card.cardName} in slot ${index + 1}.`);
+            console.log(`Placed ${selectedCard.card.cardName} in slot ${index + 1}.`);
+        } catch (error) {
+            console.error('Error placing card:', error);
+            toast.error('Failed to place card.');
+        }
+    }, [gameStage, isActiveTurnFlag, hasPlacedCard, selectedCard, myDeck, myCards, roomId, playerId, firestore, attackSourceCard, handleTargetSelection]);
+
+    // Helper to determine if a slot belongs to the opponent
+    const isOpponentSlot = (index) => {
+        // Assuming opponent's slots are rendered separately
+        // Modify this function based on your actual slot indexing
+        return true; // Since handleTargetSelection is only passed to opponent's slots
+    };
+
+    // Function to handle card selection from hand or deck
+    const handleCardSelection = useCallback((card, index, source) => {
+        if (card && card.id) { // Ensure card and card.id are defined
+            setSelectedCard({ card, index, source });
+            toast.info(`Selected ${card.cardName} for action.`);
+            console.log(`Selected card: ${card.cardName} at index ${index} from ${source}`);
+        } else {
+            toast.error('Selected card is invalid or missing an ID.');
+            console.error('Invalid card selected:', card);
+        }
+    }, []);
+
+    // Function to handle toggling card position
+    const handlePositionToggle = useCallback(async (slotIndex, currentPosition) => {
+        if (gameStage !== 'preparation') return;
+
+        const newPosition = currentPosition === 'attack' ? 'defense' : 'attack';
+
+        try {
+            // Update Firestore with the new position
+            const slotDocRef = doc(firestore, 'rooms', roomId, 'players', playerId, 'deck', slotIndex.toString());
+            await updateDoc(slotDocRef, {
+                position: newPosition
+            });
+
+            // Update local state
+            const updatedDeck = [...myDeck];
+            if (updatedDeck[slotIndex]) {
+                updatedDeck[slotIndex].position = newPosition;
+            }
+            setMyDeck(updatedDeck);
+            console.log(`Toggled position for slot ${slotIndex + 1} to ${newPosition}. Updated myDeck:`, updatedDeck);
+
+            toast.success(`Card in slot ${slotIndex + 1} switched to ${newPosition.charAt(0).toUpperCase() + newPosition.slice(1)} position.`);
+        } catch (error) {
+            console.error('Error toggling card position:', error);
+            toast.error('Failed to toggle card position.');
+        }
+    }, [gameStage, myDeck, roomId, playerId, firestore]);
+
+    // Function to handle the player marking themselves as ready
+    const handleReady = useCallback(async () => {
+        if (!isRoomJoined || !roomId || !playerId) {
+            toast.warn('You must join a room first.');
+            return;
+        }
+
+        if (!hasPlacedAllRequiredCards()) {
+            toast.warn('Please place all your Monster and Trap cards before readying up.');
+            return;
+        }
+
+        try {
+            const playerDocRef = doc(firestore, 'rooms', roomId, 'players', playerId);
             await setDoc(playerDocRef, {
-                hasPlacedCard: false
+                hasPlacedCard: true
             }, { merge: true });
 
-            setPlayerReady(false); // Reset readiness for next turn
+            setPlayerReady(true);
 
-            toast.success(`Attack performed with ${lastCard.cardName}. Turn switched to opponent.`);
+            toast.success('You are ready.');
         } catch (error) {
-            console.error('Error performing attack:', error);
-            toast.error('There was an error performing the attack. Please try again.');
+            console.error('Error setting ready:', error);
+            toast.error('Failed to mark as ready.');
         }
-    }, [isActiveTurnFlag, lastCard, roomId, playerId, myDeck, username, switchTurn, firestore]);
-
-    /**
-     * Function to handle spell card usage
-     */
-    // **New Function: Handle Spell Card Usage**
-    // Already defined above as handleSpellUsage
-
-    /**
-     * useEffect Hooks
-     * All useEffect Hooks are declared after all function declarations.
-     */
-
-    // Fetch Firebase assets on component mount
-    useEffect(() => {
-        const fetchAssets = async () => {
-            try {
-                const [bgUrl, leftBtnUrl, rightBtnUrl] = await Promise.all([
-                    getDownloadURL(storageRef(storage, 'assets/backgrounds/battlefield.jpg')),
-                    getDownloadURL(storageRef(storage, 'assets/others/leftBtn.png')),
-                    getDownloadURL(storageRef(storage, 'assets/others/rightBtn.png')),
-                ]);
-
-                setBackground(bgUrl);
-                setLeftButton(leftBtnUrl);
-                setRightButton(rightBtnUrl);
-
-                // Set assetsLoaded to true
-                setAssetsLoaded(true);
-
-            } catch (error) {
-                console.error('Error fetching Firebase assets:', error);
-                toast.error('Error fetching game assets.');
-            }
-        };
-        fetchAssets();
-    }, [storage]);
+    }, [isRoomJoined, roomId, playerId, firestore, hasPlacedAllRequiredCards]);
 
     // Handle multiplayer game state synchronization
     useEffect(() => {
@@ -747,16 +961,15 @@ function Battlefield() {
             const roomRef = doc(firestore, 'rooms', roomId);
 
             // References
-            const gameStateRef = roomRef; // Correct reference
+            const gameStateRef = roomRef;
             const lastCardRef = roomRef;
             const playersRef = collection(firestore, 'rooms', roomId, 'players');
             const playerDeckRef = collection(firestore, 'rooms', roomId, 'players', playerId, 'deck');
             const playerHandRef = collection(firestore, 'rooms', roomId, 'players', playerId, 'hand');
-            const opponentId = playerId === 'player1' ? 'player2' : 'player1';
-            const opponentDeckRef = collection(firestore, 'rooms', roomId, 'players', opponentId, 'deck');
+            const opponentIdLocal = playerId === 'player1' ? 'player2' : 'player1';
+            setOpponentId(opponentIdLocal); // Set opponentId in state
+            const opponentDeckRef = collection(firestore, 'rooms', roomId, 'players', opponentIdLocal, 'deck');
             const playerHasPlacedCardRef = doc(firestore, 'rooms', roomId, 'players', playerId);
-            const attacksCollectionRef = collection(firestore, 'rooms', roomId, 'attacks');
-            const opponentAttacksQuery = query(attacksCollectionRef, where('owner', '==', opponentId));
 
             // Listen to gameState changes
             const unsubscribeGameState = onSnapshot(roomRef, (docSnap) => {
@@ -808,6 +1021,7 @@ function Battlefield() {
                         }
                     }
                     return {
+                        id: cardData.id || null, // **Ensure 'id' is present**
                         ...cardData,
                         imageUrl
                     };
@@ -817,9 +1031,12 @@ function Battlefield() {
                 // Ensure the deck has exactly 5 slots
                 const filledDeck = Array.from({ length: 5 }).map((_, index) => {
                     return deckArray[index] || {
+                        id: null, // **Initialize 'id' as null for empty slots**
                         imageUrl: blankCardImage,
                         cardType: null,
                         cardName: '',
+                        position: 'attack',
+                        hp: null
                     };
                 });
                 setOpponentDeck(filledDeck);
@@ -843,6 +1060,7 @@ function Battlefield() {
                         }
                     }
                     return {
+                        id: cardData.id || null, // **Ensure 'id' is present**
                         ...cardData,
                         imageUrl
                     };
@@ -852,9 +1070,12 @@ function Battlefield() {
                 // Ensure the deck has exactly 5 slots
                 const filledDeck = Array.from({ length: 5 }).map((_, index) => {
                     return deckArray[index] || {
+                        id: null, // **Initialize 'id' as null for empty slots**
                         imageUrl: blankCardImage,
                         cardType: null,
                         cardName: '',
+                        position: 'attack',
+                        hp: null
                     };
                 });
                 setMyDeck(filledDeck);
@@ -873,12 +1094,12 @@ function Battlefield() {
                         try {
                             imageUrl = await getDownloadURL(storageRef(storage, imageUrl));
                         } catch (error) {
-                            console.error('Error fetching image URL:', error);
+                            console.error('Error fetching hand card image:', error);
                             imageUrl = blankCardImage;
                         }
                     }
                     return {
-                        id: doc.id, // Include the Firestore document ID
+                        id: doc.id, // **Include the Firestore document ID**
                         ...cardData,
                         imageUrl
                     };
@@ -904,25 +1125,14 @@ function Battlefield() {
                 toast.error('Failed to listen to your placement status.');
             });
 
-            // Listen to opponent's attacks
-            const unsubscribeOpponentAttacks = onSnapshot(opponentAttacksQuery, (querySnapshot) => {
-                const attacksArray = [];
-                querySnapshot.forEach(doc => {
-                    attacksArray.push(doc.data());
-                });
-                setOpponentAttacks(attacksArray.slice(0, 5).map(card => card || null));
-                console.log('Updated opponentAttacks:', attacksArray);
-            }, (error) => {
-                console.error('Error listening to opponent attacks:', error);
-                toast.error('Failed to listen to opponent attacks.');
-            });
-
             // Listen to players data and set usernames
             const unsubscribePlayers = onSnapshot(playersRef, async (querySnapshot) => {
                 const players = {};
                 querySnapshot.forEach(doc => {
                     players[doc.id] = doc.data();
                 });
+
+                console.log('Players data:', players);
 
                 const p1 = players.player1;
                 const p2 = players.player2;
@@ -940,7 +1150,7 @@ function Battlefield() {
                             'gameState.currentRound': 1,
                             'gameState.currentTurn': 'player1'
                         });
-                        toast.success('Both players have joined. Starting Preparation Phase.');
+                        toast.success('Both players are ready. Starting Preparation Phase.');
                     }
                 } else if (playerId === 'player2') {
                     setPlayer1Username(p1?.username || 'Opponent');
@@ -958,7 +1168,6 @@ function Battlefield() {
                 unsubscribePlayerDeck();
                 unsubscribePlayerHand();
                 unsubscribeHasPlacedCard();
-                unsubscribeOpponentAttacks();
                 unsubscribePlayers();
             };
         }
@@ -967,8 +1176,8 @@ function Battlefield() {
     // Listen to each player's graveyard
     useEffect(() => {
         if (isRoomJoined && roomId) {
-            const player1GraveyardRef = collection(firestore, `rooms/${roomId}/players/player1/graveyard`);
-            const player2GraveyardRef = collection(firestore, `rooms/${roomId}/players/player2/graveyard`);
+            const player1GraveyardRef = collection(firestore, 'rooms', roomId, 'players', 'player1', 'graveyard');
+            const player2GraveyardRef = collection(firestore, 'rooms', roomId, 'players', 'player2', 'graveyard');
 
             const unsubscribePlayer1Graveyard = onSnapshot(player1GraveyardRef, (querySnapshot) => {
                 const graveyardArray = [];
@@ -1015,15 +1224,19 @@ function Battlefield() {
                 setTimer((prevTimer) => {
                     if (prevTimer > 0) {
                         const newTimer = prevTimer - 1;
-                        updateDoc(doc(firestore, 'rooms', roomId), {
-                            'gameState.timer': newTimer
-                        });
+                        if (isActiveTurnFlag || gameStage === 'preparation') {
+                            updateDoc(doc(firestore, 'rooms', roomId), {
+                                'gameState.timer': newTimer
+                            });
+                        }
                         return newTimer;
                     } else {
                         // Timer expired, switch turn
                         clearInterval(timerRef.current);
                         timerRef.current = null;
-                        switchTurn();
+                        if (gameStage === 'battle' && isActiveTurnFlag) {
+                            switchTurn();
+                        }
                         return 0;
                     }
                 });
@@ -1038,7 +1251,7 @@ function Battlefield() {
                 // Preparation timer ended, transition to battle stage
                 updateDoc(doc(firestore, 'rooms', roomId), {
                     'gameState.gameStage': 'battle',
-                    'gameState.timer': 60, // Start with 1 minute for battle
+                    'gameState.timer': 60, // 1 minute battle timer
                     'gameState.currentTurn': 'player1' // Starting player
                 });
                 setGameStage('battle');
@@ -1047,7 +1260,7 @@ function Battlefield() {
                 console.log('Preparation Phase ended. Proceeding to Battle.');
             }
         } else if (gameStage === 'battle') {
-            if (isActiveTurnFlag) { // Only the active player manages the battle timer
+            if (isActiveTurnFlag && !attackSourceCard) { // Only the active player manages the battle timer
                 if (timer > 0) {
                     startTimer();
                 } else {
@@ -1064,50 +1277,14 @@ function Battlefield() {
                 timerRef.current = null;
             }
         };
-    }, [gameStage, timer, isActiveTurnFlag, roomId, switchTurn, firestore]);
-
-    // Determine opponent and player graveyards
-    const opponentGraveyard = playerId === 'player1' ? player2Graveyard : player1Graveyard;
-    const playerGraveyard = playerId === 'player1' ? player1Graveyard : player2Graveyard;
-
-    // Determine opponent's username based on playerId
-    const opponentUsername = playerId === 'player1' ? player2Username : player1Username;
-    const ownUsernameDisplay = playerId === 'player1' ? player1Username : player2Username;
+    }, [gameStage, timer, isActiveTurnFlag, roomId, switchTurn, firestore, attackSourceCard]);
 
     /**
      * Enable Ready Button Upon Both Players Placing Cards
      */
     useEffect(() => {
-        if (gameStage === 'preparation') {
-            if (playerReady && opponentReady) {
-                // Both players are ready, transition to battle
-                updateDoc(doc(firestore, 'rooms', roomId), {
-                    'gameState.gameStage': 'battle',
-                    'gameState.timer': 60, // 1 minute battle timer
-                    'gameState.currentTurn': 'player1' // Starting player
-                });
-                toast.success('Both players are ready! Proceeding to Battle.');
-                console.log('Both players are ready! Proceeding to Battle.');
-            }
-        }
-    }, [gameStage, playerReady, opponentReady, roomId, firestore]);
-
-    // Function to toggle opponent's graveyard visibility
-    const toggleOpponentGraveyard = useCallback(() => {
-        setIsOpponentGraveyardVisible(prev => !prev);
-    }, []);
-
-    // Function to toggle player's graveyard visibility
-    const togglePlayerGraveyard = useCallback(() => {
-        setIsPlayerGraveyardVisible(prev => !prev);
-    }, []);
-
-    /**
-     * useEffect to handle readiness state updates
-     */
-    useEffect(() => {
         if (isRoomJoined && roomId && playerId) {
-            const playersRef = collection(firestore, `rooms/${roomId}/players`);
+            const playersRef = collection(firestore, 'rooms', roomId, 'players');
 
             const unsubscribePlayers = onSnapshot(playersRef, (querySnapshot) => {
                 const players = {};
@@ -1116,12 +1293,23 @@ function Battlefield() {
                 });
 
                 const currentPlayer = players[playerId];
-                const opponentId = playerId === 'player1' ? 'player2' : 'player1';
-                const opponent = players[opponentId];
+                const opponentIdLocal = playerId === 'player1' ? 'player2' : 'player1';
+                const opponent = players[opponentIdLocal];
 
                 setPlayerReady(currentPlayer?.hasPlacedCard || false); // Assuming hasPlacedCard indicates readiness
                 setOpponentReady(opponent?.hasPlacedCard || false);
                 console.log(`Player Ready: ${currentPlayer?.hasPlacedCard}, Opponent Ready: ${opponent?.hasPlacedCard}`);
+
+                if (gameStage === 'preparation' && currentPlayer?.hasPlacedCard && opponent?.hasPlacedCard) {
+                    // Both players are ready, transition to battle
+                    updateDoc(doc(firestore, 'rooms', roomId), {
+                        'gameState.gameStage': 'battle',
+                        'gameState.timer': 60, // 1 minute battle timer
+                        'gameState.currentTurn': 'player1' // Starting player
+                    });
+                    toast.success('Both players are ready! Proceeding to Battle.');
+                    console.log('Both players are ready! Proceeding to Battle.');
+                }
             }, (error) => {
                 console.error('Error listening to players:', error);
                 toast.error('Failed to listen to player data.');
@@ -1129,7 +1317,32 @@ function Battlefield() {
 
             return () => unsubscribePlayers();
         }
-    }, [isRoomJoined, roomId, playerId, firestore]);
+    }, [isRoomJoined, roomId, playerId, firestore, gameStage]);
+
+    // Fetch Firebase assets on component mount
+    useEffect(() => {
+        const fetchAssets = async () => {
+            try {
+                const [bgUrl, leftBtnUrl, rightBtnUrl] = await Promise.all([
+                    getDownloadURL(storageRef(storage, 'assets/backgrounds/battlefield.jpg')),
+                    getDownloadURL(storageRef(storage, 'assets/others/leftBtn.png')),
+                    getDownloadURL(storageRef(storage, 'assets/others/rightBtn.png')),
+                ]);
+
+                setBackground(bgUrl);
+                setLeftButton(leftBtnUrl);
+                setRightButton(rightBtnUrl);
+
+                // Set assetsLoaded to true
+                setAssetsLoaded(true);
+
+            } catch (error) {
+                console.error('Error fetching Firebase assets:', error);
+                toast.error('Error fetching game assets.');
+            }
+        };
+        fetchAssets();
+    }, [storage]);
 
     /**
      * UI Rendering
@@ -1163,15 +1376,8 @@ function Battlefield() {
             )}
 
             {isRoomJoined && (
-                <>
-                    <Timer
-                        gameStage={gameStage}
-                        timer={timer}
-                        currentRound={currentRound}
-                        totalRounds={totalRounds}
-                        activePlayer={getActivePlayerUsername()}
-                    />
-
+                <div className={styles.gameContainer}>
+                    {/* Conditional Rendering Based on gameStage */}
                     {gameStage === 'waiting' && (
                         <WaitingForPlayer roomId={roomId} playerId={playerId} />
                     )}
@@ -1189,37 +1395,100 @@ function Battlefield() {
                             handleCardSelection={handleCardSelection}
                             myCards={myCards}
                             selectedCard={selectedCard}
+                            handlePositionToggle={handlePositionToggle} // **Pass the new function**
                         />
                     )}
 
                     {gameStage === 'battle' && (
-                        <div className={styles.midRow}>
-                            <div className={styles.decksContainer}>
-                                {/* Opponent's Deck Slots */}
+                        <>
+                            {/* Top Section: Timer */}
+                            <Timer
+                                gameStage={gameStage}
+                                timer={timer}
+                                currentRound={currentRound}
+                                totalRounds={totalRounds}
+                                activePlayer={getActivePlayerUsername()}
+                            />
+
+                            {/* Opponent's Section */}
+                            <div className={styles.opponentSection}>
+                                {/* Opponent's Graveyard */}
+                                <div className={styles.opponentGraveyard}>
+                                    <h3>{opponentUsername}'s Graveyard</h3>
+                                    {/* Hide opponent's graveyard cards and show only the count */}
+                                    <p>Number of Cards: {opponentGraveyard.length}</p>
+                                </div>
+
+                                {/* Opponent's Hand */}
+                                <div className={styles.opponentHand}>
+                                    <h3>{opponentUsername}'s Hand</h3>
+                                    <div className={styles.hand}>
+                                        {opponentDeck.length === 0 ? (
+                                            <p className={styles.emptyMessage}>No cards.</p>
+                                        ) : (
+                                            opponentDeck.map((card, index) => (
+                                                <img
+                                                    key={`opponent-hand-card-${index}`}
+                                                    src={backCard} // Always show back card
+                                                    alt={`Opponent's Card ${index + 1}`}
+                                                    className={styles.handCard}
+                                                />
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Opponent's Stats */}
+                                <div className={styles.opponentStats}>
+                                    <h3>{opponentUsername}'s Stats</h3>
+                                    <p>HP: {opponentHP}</p>
+                                    <p>Cards in Hand: {opponentDeck.length}</p>
+                                </div>
+                            </div>
+
+                            {/* Middle Section: Decks */}
+                            <div className={styles.decksSection}>
+                                {/* Opponent's Deck */}
                                 <CardSlots
                                     title={`${opponentUsername}'s Deck`}
                                     cards={opponentDeck}
-                                    selectedCard={null}
-                                    onSlotClick={() => {}} // No-op since opponent's deck isn't interactive
+                                    selectedCard={attackSourceCard ? attackSourceCard : null}
+                                    onSlotClick={attackSourceCard ? handleTargetSelection : () => {}} // Allow clicking only if attackSourceCard is set
                                     isOpponent={true}
+                                    isPlayer={false} // **Opponent's deck**
                                     gameStage={gameStage}
+                                    backCardImage={backCard} // **Pass back card image**
                                 />
-                                {/* Player's Deck Slots */}
+
+                                {/* Player's Deck */}
                                 <CardSlots
                                     title="Your Deck"
                                     cards={myDeck}
                                     selectedCard={selectedCard}
-                                    onSlotClick={(index) => handleSlotClick(index)}
+                                    onSlotClick={(index) => {
+                                        if (gameStage === 'battle' && !attackSourceCard) {
+                                            handleCardSelection(myDeck[index], index, 'deck');
+                                        } else {
+                                            handleSlotClick(index);
+                                        }
+                                    }}
                                     isOpponent={false}
+                                    isPlayer={true} // **Player's deck**
                                     gameStage={gameStage}
+                                    backCardImage={backCard} // **Pass back card image**
                                 />
                             </div>
-                            {/* Central Area: Last Card Played */}
+
+                            {/* Last Card Played */}
                             <div className={styles.lastCardContainer}>
                                 <h3>Last Card Played</h3>
                                 {lastCard ? (
                                     <>
-                                        <img className={styles.lastCard} src={lastCard.imageUrl} alt="Last Card" />
+                                        {lastCard.position === 'defense' ? (
+                                            <img className={styles.lastCard} src={backCard} alt="Last Card (Defense Position)" />
+                                        ) : (
+                                            <img className={styles.lastCard} src={lastCard.imageUrl} alt="Last Card" />
+                                        )}
                                         {lastCardOwner && <p>{lastCardOwner} played this card.</p>}
                                     </>
                                 ) : (
@@ -1230,51 +1499,125 @@ function Battlefield() {
                                 )}
                             </div>
 
-                            {/* Player's Utilities at the Bottom */}
-                            <UtilitiesComponent
-                                isOpponent={false}
-                                username={ownUsernameDisplay || 'You'}
-                                deck={myDeck}
-                                graveyard={playerGraveyard}
-                                roomId={roomId}
-                                playerId={playerId}
-                                isActiveTurn={isActiveTurnFlag}
-                                switchTurn={switchTurn}
-                                gameStage={gameStage}
-                                currentRound={currentRound}
-                                isGraveyardVisible={isPlayerGraveyardVisible}
-                                toggleGraveyard={togglePlayerGraveyard}
-                                handleCardClick={handleCardSelection}
-                                onAttack={handleAttack}
-                                cardsData={cards} // Use cards from CardsContext
-                                selectedCard={selectedCard} // Pass selectedCard if UtilitiesComponent needs it
-                                onSlotClick={handleSlotClick} // **Ensure this prop is passed**
-                                handleSpellUsage={handleSpellUsage} // **Pass the new function**
-                            />
-                        </div>
+                            {/* Player's Section */}
+                            <div className={styles.playerSection}>
+                                {/* Player's Graveyard */}
+                                <div className={styles.playerGraveyard}>
+                                    <h3>Your Graveyard</h3>
+                                    <div className={styles.graveyardCards}>
+                                        {playerGraveyard.length === 0 ? (
+                                            <p className={styles.emptyMessage}>Empty</p>
+                                        ) : (
+                                            playerGraveyard.map((card, index) => (
+                                                <img
+                                                    key={`player-graveyard-card-${index}`}
+                                                    src={card.imageUrl || blankCardImage}
+                                                    alt={`Graveyard Card ${index + 1}`}
+                                                    className={styles.graveyardCard}
+                                                />
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Player's Hand */}
+                                <div className={styles.playerHand}>
+                                    <h3>Your Hand</h3>
+                                    <div className={styles.hand}>
+                                        {myCards.length === 0 ? (
+                                            <p className={styles.emptyMessage}>No cards in hand.</p>
+                                        ) : (
+                                            myCards.map((card, index) => (
+                                                <img
+                                                    key={`player-hand-card-${index}`}
+                                                    src={card.imageUrl}
+                                                    alt={`Hand Card ${index + 1}`}
+                                                    className={`${styles.handCard} ${selectedCard && selectedCard.card.id === card.id ? styles.selected : ''}`}
+                                                    onClick={() => {
+                                                        if (gameStage === 'preparation') {
+                                                            handleCardSelection(card, index, 'hand');
+                                                        } else if (isActiveTurnFlag && gameStage === 'battle' && card.cardType === 'spell') {
+                                                            handleSpellUsage(card);
+                                                        }
+                                                    }}
+                                                    role={isActiveTurnFlag && gameStage === 'battle' && card.cardType === 'spell' ? 'button' : 'img'}
+                                                    tabIndex={isActiveTurnFlag && gameStage === 'battle' && card.cardType === 'spell' ? 0 : -1}
+                                                    onKeyPress={
+                                                        isActiveTurnFlag && gameStage === 'battle' && card.cardType === 'spell'
+                                                            ? (e) => {
+                                                                  if (e.key === 'Enter') handleSpellUsage(card);
+                                                              }
+                                                            : undefined
+                                                    }
+                                                    style={{
+                                                        cursor:
+                                                            gameStage === 'preparation' || (isActiveTurnFlag && gameStage === 'battle' && card.cardType === 'spell')
+                                                                ? 'pointer'
+                                                                : 'default',
+                                                    }}
+                                                />
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Player's Stats */}
+                                <div className={styles.playerStats}>
+                                    <h3>Your Stats</h3>
+                                    <p>HP: {playerHP}</p>
+                                    <p>Cards in Hand: {myCards.length}</p>
+                                </div>
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className={styles.actionButtons}>
+                                <button
+                                    className={isActiveTurnFlag ? styles.actionButton : styles.actionButtonDisabled}
+                                    onClick={isActiveTurnFlag && !attackSourceCard ? handleAttackInitiation : undefined}
+                                    disabled={!isActiveTurnFlag || attackSourceCard !== null}
+                                    aria-label="Attack"
+                                >
+                                    Attack
+                                </button>
+                                <button
+                                    className={isActiveTurnFlag ? styles.actionButton : styles.actionButtonDisabled}
+                                    onClick={isActiveTurnFlag ? switchTurn : undefined}
+                                    disabled={!isActiveTurnFlag}
+                                    aria-label="End Turn"
+                                >
+                                    End Turn
+                                </button>
+                                <button
+                                    className={isActiveTurnFlag ? styles.actionButton : styles.actionButtonDisabled}
+                                    onClick={isActiveTurnFlag ? handleDefend : undefined}
+                                    disabled={!isActiveTurnFlag}
+                                    aria-label="Defend"
+                                >
+                                    Defend
+                                </button>
+                                {attackSourceCard && (
+                                    <button
+                                        className={styles.cancelAttackButton}
+                                        onClick={() => {
+                                            setAttackSourceCard(null);
+                                            toast.info('Attack cancelled.');
+                                        }}
+                                        aria-label="Cancel Attack"
+                                    >
+                                        Cancel Attack
+                                    </button>
+                                )}
+                            </div>
+                        </>
                     )}
 
                     {gameStage === 'finished' && (
                         <EndStage
-                            playerStats={[
-                                `${player1Username}: ${player1Graveyard.length} cards in graveyard`,
-                                `${player2Username}: ${player2Graveyard.length} cards in graveyard`,
-                                // Add more stats as needed
-                            ]}
-                            onRestart={() => {
-                                // Implement handleRestart
-                                window.location.reload();
-                            }}
-                            onExit={() => {
-                                // Implement handleExit
-                                setIsRoomJoined(false);
-                                setRoomId('');
-                                setPlayerId('');
-                                setUsername('');
-                            }}
+                            winner={winner}
+                            roomId={roomId}
                         />
                     )}
-                </>
+                </div>
             )}
 
             {/* Toast Notifications */}
@@ -1288,9 +1631,11 @@ function Battlefield() {
                 pauseOnFocusLoss
                 draggable
                 pauseOnHover
-                theme="dark" // Ensure toasts are readable
+                theme="dark"
             />
         </div>
-    )
+    );
+
 }
+
 export default Battlefield;

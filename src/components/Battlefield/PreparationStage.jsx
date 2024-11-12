@@ -2,6 +2,7 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 import styles from './PreparationStage.module.css';
+import backCard from '../../assets/cards/back-card.png'; // Import back card image
 
 /**
  * PreparationStage Component
@@ -18,7 +19,8 @@ function PreparationStage({
     handleSlotClick,
     handleCardSelection,
     myCards,
-    selectedCard
+    selectedCard,
+    handlePositionToggle // **New Prop: Handle Position Toggle**
 }) {
     // Debugging: Log props
     React.useEffect(() => {
@@ -44,8 +46,29 @@ function PreparationStage({
                             onClick={() => handleSlotClick(index)}
                             aria-label={`Deck Slot ${index + 1}`}
                         >
-                            <img src={card.imageUrl} alt={`Slot ${index + 1}`} className={styles.cardImage} />
-                            {card.cardName ? <p>{card.cardName}</p> : <p>Empty Slot</p>}
+                            <img
+                                src={card.imageUrl !== backCard ? card.imageUrl : backCard}
+                                alt={card.cardName || `Slot ${index + 1}`}
+                                className={styles.cardImage}
+                            />
+                            {card.cardName ? (
+                                <div className={styles.cardDetails}>
+                                    <p>{card.cardName}</p>
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation(); // Prevent triggering slot click
+                                            handlePositionToggle(index, card.position);
+                                        }}
+                                        className={styles.positionButton}
+                                        aria-label={`Toggle position for ${card.cardName}`}
+                                    >
+                                        {card.position === 'attack' ? 'Switch to Defense' : 'Switch to Attack'}
+                                    </button>
+                                    <p>Position: {card.position.charAt(0).toUpperCase() + card.position.slice(1)}</p>
+                                </div>
+                            ) : (
+                                <p>Empty Slot</p>
+                            )}
                         </div>
                     ))}
                 </div>
@@ -86,6 +109,7 @@ function PreparationStage({
             {opponentReady && <p className={styles.readyStatus}>{opponentUsername} is ready!</p>}
         </div>
     );
+
 }
 
 PreparationStage.propTypes = {
@@ -99,6 +123,7 @@ PreparationStage.propTypes = {
         imageUrl: PropTypes.string.isRequired,
         cardType: PropTypes.string,
         cardName: PropTypes.string,
+        position: PropTypes.oneOf(['attack', 'defense']).isRequired, // **New Field: position**
     })).isRequired,
     handleSlotClick: PropTypes.func.isRequired,
     handleCardSelection: PropTypes.func.isRequired,
@@ -112,6 +137,7 @@ PreparationStage.propTypes = {
         card: PropTypes.object,
         slotIndex: PropTypes.number, // Changed from index to slotIndex
     }),
+    handlePositionToggle: PropTypes.func.isRequired, // **New Prop**
 };
 
 export default PreparationStage;

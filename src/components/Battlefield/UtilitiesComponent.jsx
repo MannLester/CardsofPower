@@ -1,8 +1,8 @@
 // UtilitiesComponent.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import styles from './UtilitiesComponent.module.css';
-import backCard from '../../assets/cards/back-card.png';
+import backCard from '../../assets/cards/back-card.png'; // Import back card image
 import blankCardImage from '../../assets/cards/blank.png';
 import graveyardCard from '../../assets/cards/graveyard.png';
 import leftBtn from '../../assets/others/leftBtn.png';
@@ -14,10 +14,13 @@ import cardsIcon from '../../assets/others/card.png';
 import { storage } from '../firebaseConfig'; // Ensure storage is correctly initialized
 import { ref as storageRef, getDownloadURL } from 'firebase/storage';
 
+import CardSlots from './CardSlots'; // Import CardSlots component
+
 const UtilitiesComponent = React.memo(({
     isOpponent,
     username,
-    deck,
+    deck, // Placed Monster/Trap cards
+    hand,  // Remaining Spell and unused cards
     graveyard,
     roomId,
     playerId,
@@ -31,12 +34,14 @@ const UtilitiesComponent = React.memo(({
     onAttack,
     cardsData,
     selectedCard, // Added selectedCard as a prop
-    onSlotClick // Added onSlotClick as a prop
+    onSlotClick,   // Added onSlotClick as a prop
+    handleSpellUsage // Added handleSpellUsage as a prop
 }) => {
     const [deckImages, setDeckImages] = useState([]);
+    const [handImages, setHandImages] = useState([]);
     const [graveyardImages, setGraveyardImages] = useState([]);
     const [currentIndex, setCurrentIndex] = useState(0);
-    const cardsToShow = 3; // Number of cards to show at once
+    const cardsToShow = 5; // Updated to 5 cards
 
     // Fetch deck images
     useEffect(() => {
@@ -61,9 +66,42 @@ const UtilitiesComponent = React.memo(({
         fetchDeckImages();
     }, [deck, storage]);
 
+    // Fetch hand images
+    useEffect(() => {
+        const fetchHandImages = async () => {
+            if (!hand || hand.length === 0) {
+                setHandImages([]);
+                return;
+            }
+
+            const promises = hand.map(async (card) => {
+                if (card.imageUrl && card.imageUrl !== blankCardImage) {
+                    try {
+                        const url = await getDownloadURL(storageRef(storage, card.imageUrl));
+                        return url;
+                    } catch (error) {
+                        console.error('Error fetching hand card image:', error);
+                        return blankCardImage;
+                    }
+                }
+                return blankCardImage;
+            });
+
+            const images = await Promise.all(promises);
+            setHandImages(images);
+        };
+
+        fetchHandImages();
+    }, [hand, storage]);
+
     // Fetch graveyard images
     useEffect(() => {
         const fetchGraveyardImages = async () => {
+            if (!graveyard || graveyard.length === 0) {
+                setGraveyardImages([]);
+                return;
+            }
+
             const promises = graveyard.map(async (card) => {
                 if (card.imageUrl && card.imageUrl !== blankCardImage) {
                     try {
@@ -133,6 +171,7 @@ const UtilitiesComponent = React.memo(({
             )}
 
             <div className={styles.utilitiesRow}>
+                {/* Graveyard Icon */}
                 <img
                     onClick={!isOpponent && gameStage !== 'finished' ? toggleGraveyard : undefined}
                     src={graveyardCard}
@@ -140,80 +179,95 @@ const UtilitiesComponent = React.memo(({
                     className={styles.graveyardIcon}
                 />
 
+                {/* Deck Carousel */}
                 <div className={styles.carousel}>
                     <button
                         onClick={handlePrevious}
                         className={styles.navButton}
                         disabled={currentIndex === 0 || isOpponent}
-                        aria-label="Previous Cards"
+                        aria-label="Previous Deck Cards"
                     >
                         <img src={leftBtn} alt="Previous" />
                     </button>
 
-                    <div className={styles.deck}>
-                        {deckImages.slice(currentIndex, currentIndex + cardsToShow).map((url, index) => (
-                            <img
-                                key={`deck-${currentIndex + index}`}
-                                src={url}
-                                alt={`Deck Card ${currentIndex + index + 1}`}
-                                className={`${styles.deckCard} ${
-                                    isInteractive && selectedCard && selectedCard.index === (currentIndex + index)
-                                        ? styles.selected
-                                        : ''
-                                } ${
-                                    isOpponent && url === blankCardImage
-                                        ? styles.dimmed
-                                        : ''
-                                }`}
-                                onClick={() => {
-                                    if (!isOpponent && isInteractive) {
-                                        onSlotClick(currentIndex + index);
-                                    }
-                                }}
-                                role={!isOpponent && isInteractive ? 'button' : undefined}
-                                tabIndex={!isOpponent && isInteractive ? 0 : undefined}
-                                onKeyPress={
-                                    !isOpponent && isInteractive
-                                        ? (e) => {
-                                              if (e.key === 'Enter') onSlotClick(currentIndex + index);
-                                          }
-                                        : undefined
-                                }
-                                style={{
-                                    cursor:
-                                        isOpponent || !isInteractive
-                                            ? 'default'
-                                            : 'pointer',
-                                    opacity:
-                                        isOpponent && url === blankCardImage
-                                            ? 0.6
-                                            : 1,
-                                }}
-                            />
-                        ))}
-                        {/* Fill remaining slots with blank images if necessary */}
-                        {Array.from({ length: Math.max(0, cardsToShow - (deckImages.length - currentIndex)) }).map((_, index) => (
-                            <img key={`blank-deck-${index}`} src={blankCardImage} alt="Blank Card" className={styles.blankCard} />
-                        ))}
-                    </div>
+                    {/* Player's Deck */}
+                    <CardSlots
+                        title="Your Deck"
+                        cards={deck}
+                        selectedCard={selectedCard}
+                        onSlotClick={isInteractive ? onSlotClick : null}
+                        isOpponent={isOpponent}
+                        isPlayer={!isOpponent} // **Indicate if this is player's deck**
+                        gameStage={gameStage}
+                        backCardImage={backCard} // **Pass back card image**
+                    />
 
                     <button
                         onClick={handleNext}
                         className={styles.navButton}
                         disabled={currentIndex + cardsToShow >= deckImages.length || isOpponent}
-                        aria-label="Next Cards"
+                        aria-label="Next Deck Cards"
                     >
                         <img src={rightBtn} alt="Next" />
                     </button>
                 </div>
 
+                {/* Hand Section */}
+                <div className={styles.handContainer}>
+                    <h3>Your Hand</h3>
+                    <div className={styles.hand}>
+                        {handImages.length === 0 ? (
+                            <p className={styles.emptyMessage}>No cards in hand.</p>
+                        ) : (
+                            Array.from({ length: 5 }).map((_, index) => (
+                                <div key={`hand-slot-${index}`} className={styles.handSlot}>
+                                    {handImages[index] ? (
+                                        <img
+                                            src={handImages[index]}
+                                            alt={`Hand Card ${index + 1}`}
+                                            className={styles.handCard}
+                                            onClick={() => {
+                                                if (isActiveTurn && gameStage === 'battle') {
+                                                    // Find the card object based on imageUrl
+                                                    const card = hand.find(c => c.imageUrl === handImages[index]);
+                                                    if (card && card.cardType === 'spell') {
+                                                        handleSpellUsage(card);
+                                                    }
+                                                }
+                                            }}
+                                            role={isActiveTurn && gameStage === 'battle' && hand[index].cardType === 'spell' ? 'button' : undefined}
+                                            tabIndex={isActiveTurn && gameStage === 'battle' && hand[index].cardType === 'spell' ? 0 : undefined}
+                                            onKeyPress={
+                                                isActiveTurn && gameStage === 'battle' && hand[index].cardType === 'spell'
+                                                    ? (e) => {
+                                                          if (e.key === 'Enter') handleSpellUsage(hand[index]);
+                                                      }
+                                                    : undefined
+                                            }
+                                            style={{
+                                                cursor:
+                                                    isActiveTurn && gameStage === 'battle' && hand[index].cardType === 'spell'
+                                                        ? 'pointer'
+                                                        : 'default',
+                                            }}
+                                        />
+                                    ) : (
+                                        <img src={blankCardImage} alt="Empty Hand Slot" className={styles.blankCard} />
+                                    )}
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+
+                {/* Stats */}
                 <div className={styles.stats}>
                     <p className={styles.username}>{username}</p>
                     <p className={styles.stat}>
                         <img className={styles.icon} src={heartIcon} alt="HP" /> HP: 100
                     </p>
                     <p className={styles.stat}>
-                        <img className={styles.icon} src={cardsIcon} alt="Cards" /> Cards: {deck.length}
+                        <img className={styles.icon} src={cardsIcon} alt="Cards" /> Cards in Hand: {hand ? hand.length : 0}
                     </p>
                 </div>
             </div>
@@ -241,35 +295,48 @@ const UtilitiesComponent = React.memo(({
         </>
     )});
 
-    UtilitiesComponent.propTypes = {
-        isOpponent: PropTypes.bool.isRequired,
-        username: PropTypes.string.isRequired,
-        deck: PropTypes.arrayOf(PropTypes.shape({
-            imageUrl: PropTypes.string.isRequired,
-            cardType: PropTypes.string,
-            cardName: PropTypes.string,
-        })).isRequired,
-        graveyard: PropTypes.arrayOf(PropTypes.shape({
-            imageUrl: PropTypes.string.isRequired,
-            cardType: PropTypes.string,
-            cardName: PropTypes.string,
-        })).isRequired,
-        roomId: PropTypes.string.isRequired,
-        playerId: PropTypes.string.isRequired,
-        isActiveTurn: PropTypes.bool.isRequired,
-        switchTurn: PropTypes.func.isRequired,
-        gameStage: PropTypes.string.isRequired,
-        currentRound: PropTypes.number.isRequired,
-        isGraveyardVisible: PropTypes.bool.isRequired,
-        toggleGraveyard: PropTypes.func.isRequired,
-        handleCardClick: PropTypes.func,
-        onAttack: PropTypes.func,
-        cardsData: PropTypes.array.isRequired,
-        selectedCard: PropTypes.shape({
-            card: PropTypes.object,
-            index: PropTypes.number,
-        }),
-        onSlotClick: PropTypes.func.isRequired, // Ensure this prop is required
-    };
+UtilitiesComponent.propTypes = {
+    isOpponent: PropTypes.bool.isRequired,
+    username: PropTypes.string.isRequired,
+    deck: PropTypes.arrayOf(PropTypes.shape({
+        imageUrl: PropTypes.string.isRequired,
+        cardType: PropTypes.string,
+        cardName: PropTypes.string,
+        position: PropTypes.oneOf(['attack', 'defense']).isRequired,
+    })).isRequired,
+    hand: PropTypes.arrayOf(PropTypes.shape({
+        imageUrl: PropTypes.string.isRequired,
+        cardType: PropTypes.string,
+        cardName: PropTypes.string,
+        id: PropTypes.string, // Assuming each hand card has a unique ID
+    })).isRequired, // **New Prop**
+    graveyard: PropTypes.arrayOf(PropTypes.shape({
+        imageUrl: PropTypes.string.isRequired,
+        cardType: PropTypes.string,
+        cardName: PropTypes.string,
+    })).isRequired,
+    roomId: PropTypes.string.isRequired,
+    playerId: PropTypes.string.isRequired,
+    isActiveTurn: PropTypes.bool.isRequired,
+    switchTurn: PropTypes.func.isRequired,
+    gameStage: PropTypes.string.isRequired,
+    currentRound: PropTypes.number.isRequired,
+    isGraveyardVisible: PropTypes.bool.isRequired,
+    toggleGraveyard: PropTypes.func.isRequired,
+    handleCardClick: PropTypes.func,
+    onAttack: PropTypes.func,
+    cardsData: PropTypes.array.isRequired,
+    selectedCard: PropTypes.shape({
+        card: PropTypes.object,
+        index: PropTypes.number,
+    }),
+    onSlotClick: PropTypes.func.isRequired,
+    handleSpellUsage: PropTypes.func.isRequired, // **New Prop**
+};
+
+// Define defaultProps to prevent undefined props
+UtilitiesComponent.defaultProps = {
+    selectedCard: null,
+};
 
 export default UtilitiesComponent;
