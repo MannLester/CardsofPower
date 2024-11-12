@@ -1,18 +1,25 @@
-
 /* UtilitiesComponent.module.css */
 
 .utilitiesRow {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: space-between; /* Distribute space between graveyard icon, deck carousel, and stats */
     padding: 20px;
     width: 100%;
+    background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent background for better contrast */
+    border-radius: 10px;
+    box-sizing: border-box;
 }
 
 .graveyardIcon {
     width: 50px; /* Increased size */
     height: 50px;
     cursor: pointer;
+    transition: transform 0.3s;
+}
+
+.graveyardIcon:hover {
+    transform: scale(1.1);
 }
 
 .carousel {
@@ -20,6 +27,7 @@
     align-items: center;
     justify-content: center;
     gap: 20px;
+    flex-grow: 1; /* Allow carousel to take up available space */
 }
 
 .navButton {
@@ -43,6 +51,7 @@
 .deck {
     display: flex;
     gap: 15px;
+    overflow: hidden; /* Hide overflowing cards */
 }
 
 .deckCard, .blankCard {
@@ -52,6 +61,7 @@
     border: 2px solid #ccc;
     border-radius: 10px;
     transition: border-color 0.3s, transform 0.3s;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Added shadow for depth */
 }
 
 .deckCard:hover {
@@ -60,7 +70,7 @@
 }
 
 .selected {
-    border-color: #28a745 !important;
+    border-color: #ffc107 !important; /* Amber color for selected slot */
     transform: scale(1.1) !important;
 }
 
@@ -68,18 +78,83 @@
     opacity: 0.6;
 }
 
+.handContainer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-left: 20px;
+}
+
+.handContainer h3 {
+    margin-bottom: 10px;
+    color: #fff;
+}
+
+.hand {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.handSlot {
+    width: 120px;
+    height: 180px;
+    border: 2px dashed #ccc;
+    border-radius: 10px;
+    background-color: #f0f0f0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.3s, transform 0.3s;
+}
+
+.handSlot:hover {
+    border-color: #007bff;
+    transform: scale(1.05);
+}
+
+.handCard {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: transform 0.3s;
+}
+
+.handCard:hover {
+    transform: scale(1.05);
+}
+
+.blankCard {
+    width: 120px;
+    height: 180px;
+    object-fit: cover;
+}
+
+.emptyMessage {
+    color: #ccc;
+    font-size: 1.5em; /* Increased size */
+    text-align: center;
+}
+
 .stats {
     text-align: right;
+    color: #fff; /* White text for better contrast */
 }
 
 .username {
     font-size: 1.5em; /* Increased size */
     font-weight: bold;
+    margin-bottom: 10px;
 }
 
 .stat {
     font-size: 1.3em; /* Increased size */
     margin: 5px 0;
+    display: flex;
+    align-items: center;
 }
 
 .icon {
@@ -100,6 +175,7 @@
     align-items: center;
     justify-content: center;
     z-index: 1000;
+    padding: 20px;
 }
 
 .closeButton {
@@ -125,8 +201,8 @@
 }
 
 .graveyardCard {
-    width: 150px; /* Increased size */
-    height: 225px;
+    width: 120px; /* Increased size */
+    height: 180px;
     object-fit: cover;
     border: 2px solid #fff;
     border-radius: 10px;
@@ -135,34 +211,5 @@
 .emptyMessage {
     color: #ccc;
     font-size: 1.5em; /* Increased size */
-}
-
-.battleActions {
-    display: flex;
-    gap: 20px;
-    justify-content: center;
-    margin-top: 30px;
-}
-
-.actionButton, .actionButtonDisabled {
-    padding: 15px 30px;
-    font-size: 1.5em; /* Increased size */
-    border: none;
-    border-radius: 10px;
-    cursor: pointer;
-    transition: background-color 0.3s;
-}
-
-.actionButton {
-    background-color: #007bff;
-    color: white;
-}
-
-.actionButton:hover {
-    background-color: #0056b3;
-}
-
-.actionButtonDisabled {
-    background-color: #ccc;
-    cursor: not-allowed;
+    text-align: center;
 }

@@ -1,54 +1,84 @@
 /* CardSlots.module.css */
 
 .cardSlotsContainer {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    margin: 10px;
+    margin: 10px 0;
+    width: 100%;
+    text-align: center;
 }
 
-.deckTitle {
-    margin-bottom: 10px;
+.title {
     color: #fff;
+    font-size: 1.2em;
+    margin-bottom: 10px;
 }
 
-.cardSlot {
+.slotsWrapper {
     display: flex;
     gap: 10px;
     justify-content: center;
     flex-wrap: wrap;
 }
 
-.card {
-    width: 100px;
-    height: 150px;
-    border: 2px solid #fff;
-    border-radius: 8px;
+.cardSlot {
+    width: 80px;
+    height: 120px;
+    border: 2px solid #ccc;
+    border-radius: 10px;
+    overflow: hidden;
+    cursor: pointer;
+    position: relative;
+    transition: border-color 0.3s, transform 0.3s;
+    background-color: #f8f9fa;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    background-color: rgba(255, 255, 255, 0.2);
-    cursor: pointer;
-    transition: transform 0.2s;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
-.card:hover {
+.playerSlot {
+    border-color: #28a745; /* Green border for player's slots */
+}
+
+.opponentSlot {
+    border-color: #dc3545; /* Red border for opponent's slots */
+}
+
+.cardSlot:hover {
+    border-color: #007bff;
     transform: scale(1.05);
 }
 
 .selected {
-    border-color: yellow;
-    box-shadow: 0 0 10px yellow;
+    border-color: #ffc107 !important; /* Amber color for selected slot */
+    transform: scale(1.1) !important;
 }
 
-.dimmed {
-    opacity: 0.6;
-}
-
-.cardImage {
-    width: 80px;
-    height: 120px;
+.cardImage, .blankCard {
+    width: 90%;
+    height: 90%;
     object-fit: cover;
-    border-radius: 4px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.cardName {
+    margin-top: 5px;
+    font-weight: bold;
+    font-size: 0.8em;
+    color: #fff; /* White text for better contrast */
+    background-color: rgba(0, 0, 0, 0.6); /* Semi-transparent background */
+    width: 100%;
+    text-align: center;
+    padding: 2px 0;
+}
+
+.cardPosition {
+    margin-top: 2px;
+    font-size: 0.7em;
+    color: #ffc107; /* Amber color for visibility */
+    background-color: rgba(0, 0, 0, 0.6);
+    width: 100%;
+    text-align: center;
+    padding: 2px 0;
 }

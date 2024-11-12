@@ -1,17 +1,17 @@
 /* Battlefield.module.css */
 
 .background {
-    width: 100vw;
-    height: 100vh;
+    /* Add styles for the background image */
     background-size: cover;
     background-position: center;
+    min-height: 100vh;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
 }
 
-/* Increase the size of the lobby */
+/* Lobby Styles */
 .lobby {
     background-color: rgba(0, 0, 0, 0.7);
     padding: 40px;
@@ -19,9 +19,11 @@
     text-align: center;
     max-width: 600px;
     width: 90%;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3); /* Added shadow for depth */
 }
 
-.usernameInput, .roomIdInput {
+.usernameInput,
+.roomIdInput {
     width: 80%;
     padding: 15px;
     margin: 10px 0;
@@ -32,7 +34,8 @@
     color: #ffffff; /* White text */
 }
 
-.createRoomButton, .joinRoomButton {
+.createRoomButton,
+.joinRoomButton {
     padding: 15px 30px;
     margin: 10px;
     font-size: 1.2em;
@@ -44,106 +47,306 @@
     transition: background-color 0.3s;
 }
 
-.createRoomButton:hover, .joinRoomButton:hover {
+.createRoomButton:hover,
+.joinRoomButton:hover {
     background-color: #218838;
 }
 
-/* Increase the size of other components as needed */
-.midRow {
+.createRoomButton:hover, .joinRoomButton:hover {
+    background-color: #0056b3;
+}
+
+.gameContainer {
+    width: 90%;
+    max-width: 1200px;
+    margin: 20px auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* Opponent's Section */
+.opponentSection {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    margin: 10px 0;
+}
+
+.opponentGraveyard, .opponentStats {
+    width: 20%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.opponentGraveyard h3, .opponentStats h3 {
+    color: #fff;
+    margin-bottom: 10px;
+}
+
+.graveyardCards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+}
+
+.graveyardCard {
+    width: 80px;
+    height: 120px;
+    object-fit: cover;
+    border: 2px solid #fff;
+    border-radius: 8px;
+}
+
+.emptyMessage {
+    color: #ccc;
+    font-size: 1em;
+    text-align: center;
+}
+
+.opponentHand {
+    width: 40%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.opponentHand h3 {
+    color: #fff;
+    margin-bottom: 10px;
+}
+
+.hand {
+    display: flex;
+    gap: 10px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: 5px 0;
+}
+
+.handCard {
+    width: 80px;
+    height: 120px;
+    object-fit: cover;
+    border: 2px solid #ccc;
+    border-radius: 8px;
+    transition: transform 0.3s;
+}
+
+.handCard:hover {
+    transform: scale(1.05);
+}
+
+/* Decks Section */
+.decksSection {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 50px;
+    width: 100%;
+    margin: 20px 0;
+}
+
+/* Last Card Played */
+.lastCardContainer {
+    text-align: center;
+    margin: 20px 0;
+}
+
+.lastCardContainer h3 {
+    color: #fff;
+    margin-bottom: 10px;
+}
+
+.lastCard {
+    width: 120px;
+    height: 180px;
+    object-fit: cover;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.lastCardContainer p {
+    color: #fff;
+    font-size: 1em;
+    margin-top: 5px;
+}
+
+/* Player's Section */
+.playerSection {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    margin: 10px 0;
+}
+
+.playerGraveyard, .playerStats {
+    width: 20%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.playerGraveyard h3, .playerStats h3 {
+    color: #fff;
+    margin-bottom: 10px;
+}
+
+.playerHand {
+    width: 40%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.playerHand h3 {
+    color: #fff;
+    margin-bottom: 10px;
+}
+
+.playerHand .hand {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.playerHand .handCard {
+    width: 80px;
+    height: 120px;
+    object-fit: cover;
+    border: 2px solid #ccc;
+    border-radius: 8px;
+    transition: transform 0.3s, border-color 0.3s;
+}
+
+.playerHand .handCard:hover {
+    transform: scale(1.05);
+}
+
+.playerHand .handCard.selected {
+    border-color: #ffc107;
+    transform: scale(1.1);
+}
+
+.playerStats {
+    width: 20%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.playerStats h3 {
+    color: #fff;
+    margin-bottom: 10px;
+}
+
+.playerStats p {
+    color: #fff;
+    font-size: 1em;
+    margin: 5px 0;
+}
+
+/* Action Buttons */
+.actionButtons {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    margin-top: 30px;
+}
+
+.actionButton, .actionButtonDisabled {
+    padding: 10px 20px;
+    font-size: 1em;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s, transform 0.3s;
+}
+
+.actionButton {
+    background-color: #28a745; /* Green for active actions */
+    color: white;
+}
+
+.actionButton:hover {
+    background-color: #218838;
+    transform: scale(1.05);
+}
+
+.actionButtonDisabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+/* Graveyard Overlay */
+.graveyardOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.8);
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    width: 100%;
+    z-index: 1000;
+    padding: 20px;
 }
 
-.decksContainer {
-    display: flex;
-    gap: 50px; /* Increased gap */
-    margin-bottom: 30px;
-}
-
-.lastCardContainer {
-    text-align: center;
-    margin-bottom: 30px;
-}
-
-.lastCard {
-    width: 150px; /* Increased size */
-    height: 225px;
-    object-fit: cover;
-}
-
-.readyButton {
-    margin-top: 30px;
-    padding: 15px 30px;
-    font-size: 1.3em;
+.closeButton {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: none;
     border: none;
-    border-radius: 10px;
-    background-color: #007bff;
-    color: white;
     cursor: pointer;
-    transition: background-color 0.3s;
 }
 
-.readyButton:disabled {
-    background-color: #6c757d;
-    cursor: not-allowed;
+.graveyardTitle {
+    color: #fff;
+    font-size: 2em;
+    margin-bottom: 20px;
 }
 
-.readyButton:not(:disabled):hover {
-    background-color: #0056b3;
-}
-
-.graveyardOverlay {
-    /* Adjust styles for graveyard overlay if needed */
-}
-
-.cardImage, .handCardImage, .graveyardCard, .deckCard, .lastCard {
-    /* Ensure all card images are larger */
-    width: 120px; /* Increased size */
-    height: 180px;
-    object-fit: cover;
-}
-
-/* Additional classes to handle larger elements */
-.handCards {
+.graveyardCards {
     display: flex;
-    gap: 20px;
-    justify-content: center;
+    gap: 15px;
     flex-wrap: wrap;
+    justify-content: center;
 }
 
-.handCard {
-    width: 120px; /* Increased size */
-    height: 180px;
-    border: 2px solid #ccc;
+.graveyardCard {
+    width: 100px;
+    height: 150px;
+    object-fit: cover;
+    border: 2px solid #fff;
     border-radius: 10px;
-    overflow: hidden;
-    cursor: pointer;
-    position: relative;
-    transition: border-color 0.3s, transform 0.3s;
 }
 
-.handCard:hover {
-    border-color: #007bff;
-    transform: scale(1.05);
+.emptyMessage {
+    color: #ccc;
+    font-size: 1.5em; /* Increased size */
+    text-align: center;
 }
 
-.selectedCard {
-    border-color: #28a745 !important;
+/* Timer Section */
+.timerContainer {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    width: 100%;
+    padding: 10px 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    border-bottom: 2px solid #fff;
 }
 
-.selected {
-    border-color: #ffc107 !important;
-}
-
-.readyStatus {
+.timer, .roundInfo, .activePlayer {
+    color: #fff;
     font-size: 1.2em;
-}
-
-.emptyHand {
-    font-style: italic;
-    color: #666;
-    font-size: 1.1em;
 }
