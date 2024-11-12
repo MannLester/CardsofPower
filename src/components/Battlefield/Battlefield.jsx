@@ -914,12 +914,12 @@ const handlePreparationSlotClick = useCallback(async (index) => {
 
         // Validate card type based on game stage
         if (!['monster', 'trap'].includes(selectedCard.card.cardType)) {
-            toast.error('Only Monster and Trap cards can be placed in the slots during preparation.');
+            toast.error('Only Monster and Trap cards can be placed in the slots.');
             return;
         }
 
         // Ensure the slot is empty
-        if (myDeck[index].imageUrl !== blankCardImage) {
+        if (myDeck[index].id !== null) {
             toast.warn('This slot is already occupied.');
             return;
         }
@@ -972,12 +972,19 @@ const handlePreparationSlotClick = useCallback(async (index) => {
             // Reset selected card
             setSelectedCard(null);
 
+            // Switch turn if in battle phase
+            if (gameStage === 'preparation') {
+                // In preparation phase, do not switch turn
+            } else {
+                await switchTurn();
+            }
+
         } catch (error) {
             console.error('Error placing card:', error);
             toast.error('Failed to place card.');
         }
     }
-}, [gameStage, selectedCard, myDeck, handleRemoveCard, firestore, roomId, playerId, setMyDeck, setMyCards]);
+}, [selectedCard, myDeck, handleRemoveCard, firestore, roomId, playerId, setMyDeck, setMyCards, gameStage, switchTurn]);
 
 /**
  * Handler for slot clicks during the Battle phase.
@@ -1029,6 +1036,97 @@ const handleBattleSlotClick = useCallback(async (index) => {
     }
 }, [myDeck, firestore, roomId, playerId]);
 
+// **New Function: Handle Battle Phase Card Placement**
+const handleBattleCardPlacement = useCallback(async (index) => {
+    // Ensure it's the player's turn
+    if (!isActiveTurnFlag) {
+        toast.warn("It's not your turn!");
+        return;
+    }
+
+    // Find if player has at least one monster or trap card
+    const availableCards = myCards.filter(card => ['monster', 'trap'].includes(card.cardType));
+
+    if (availableCards.length === 0) {
+        toast.warn('No Monster or Trap cards available in hand to place.');
+        return;
+    }
+
+    // Ensure a card is selected
+    if (!selectedCard) {
+        toast.warn('Please select a Monster or Trap card from your hand to place.');
+        return;
+    }
+
+    // Ensure the selected card is a Monster or Trap
+    if (!['monster', 'trap'].includes(selectedCard.card.cardType)) {
+        toast.error('Only Monster and Trap cards can be placed in slots.');
+        return;
+    }
+
+    // Ensure the slot is empty
+    if (myDeck[index].id !== null) {
+        toast.warn('This slot is already occupied.');
+        return;
+    }
+
+    try {
+        // Update Firestore: set the card in the slot, including 'id'
+        const slotDocRef = doc(firestore, 'rooms', roomId, 'players', playerId, 'deck', index.toString());
+        await setDoc(slotDocRef, {
+            id: selectedCard.card.id,
+            imageUrl: selectedCard.card.imageUrl,
+            cardType: selectedCard.card.cardType,
+            cardName: selectedCard.card.cardName,
+            position: 'attack',
+            slotIndex: index,
+            hp: selectedCard.card.hp || 20
+        }, { merge: true });
+
+        // Update lastCard in Firestore
+        const lastCardRef = doc(firestore, 'rooms', roomId);
+        await updateDoc(lastCardRef, {
+            lastCard: {
+                card: { ...selectedCard.card, slotIndex: index, hp: selectedCard.card.hp || 20 },
+                owner: playerId
+            }
+        });
+
+        // Update local state
+        setMyDeck(prevDeck => {
+            const updatedDeck = [...prevDeck];
+            updatedDeck[index] = {
+                ...selectedCard.card,
+                position: 'attack',
+                slotIndex: index,
+                hp: selectedCard.card.hp || 20,
+                id: selectedCard.card.id
+            };
+            return updatedDeck;
+        });
+
+        setMyCards(prevCards => prevCards.filter(card => card.id !== selectedCard.card.id));
+
+        // Remove the card from the hand in Firestore
+        const handDocRef = doc(firestore, 'rooms', roomId, 'players', playerId, 'hand', selectedCard.card.id);
+        await deleteDoc(handDocRef);
+
+        // Provide user feedback
+        toast.success(`Placed ${selectedCard.card.cardName} in slot ${index + 1}.`);
+        console.log(`Placed ${selectedCard.card.cardName} in slot ${index + 1}.`);
+
+        // Reset selected card
+        setSelectedCard(null);
+
+        // Switch turn
+        await switchTurn();
+
+    } catch (error) {
+        console.error('Error placing card during battle:', error);
+        toast.error('Failed to place card.');
+    }
+}, [isActiveTurnFlag, myCards, selectedCard, firestore, roomId, playerId, setMyDeck, setMyCards, switchTurn]);
+
 /**
  * Unified handler for slot clicks.
  * Delegates to phase-specific handlers based on the current game stage.
@@ -1037,11 +1135,17 @@ const handleSlotClick = useCallback(async (index) => {
     if (gameStage === 'preparation') {
         await handlePreparationSlotClick(index);
     } else if (gameStage === 'battle') {
-        handleBattleSlotClick(index);
+        if (isActiveTurnFlag && myDeck[index].id === null) {
+            // Attempt to place a card into the empty slot
+            await handleBattleCardPlacement(index);
+        } else {
+            // Attempt to attack with the card in the slot
+            handleBattleSlotClick(index);
+        }
     } else {
         toast.warn('Cannot place or remove cards at this stage.');
     }
-}, [gameStage, handlePreparationSlotClick, handleBattleSlotClick]);
+}, [gameStage, handlePreparationSlotClick, handleBattleSlotClick, isActiveTurnFlag, myDeck, handleBattleCardPlacement]);
 
 // Helper to determine if a slot belongs to the opponent
 const isOpponentSlot = (index) => {
@@ -1680,7 +1784,7 @@ return (
                                 title="Your Deck"
                                 cards={myDeck}
                                 selectedCard={selectedCard}
-                                onSlotClick={gameStage === 'preparation' ? handlePreparationSlotClick : handleBattleSlotClick}
+                                onSlotClick={handleSlotClick} // Updated to use unified handler
                                 isOpponent={false}
                                 isPlayer={true}
                                 gameStage={gameStage}
