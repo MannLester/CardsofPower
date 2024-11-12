@@ -14,11 +14,11 @@ function App() {
       <Routes>
         {/* Only use for actual implementation */ }
 
-        <Route exact path="/battlefield" element={<Battlefield />}/>
+        <Route path="/:userDocId/battlefield" element={<Battlefield />}/>
         <Route path="/" element={<LoginPage />}/> 
-        <Route path="/home" element={<HomePage />}/> 
-        <Route path="/inventory" element={<InventoryPage />}/>
-        <Route path="/dictionary" element={<DictionaryPage />}/>
+        <Route path="/:userDocId/home" element={<HomePage />}/> 
+        <Route path="/:userDocId/inventory" element={<InventoryPage />}/>
+        <Route path="/:userDocId/dictionary" element={<DictionaryPage />}/>
         {/* Only use for testing implementation */}
         {/* <Route path="/" element={<Battlefield />}/> */}
       </Routes>
