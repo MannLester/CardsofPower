@@ -520,6 +520,64 @@ function Battlefield() {
             toast.error('Failed to perform defend action.');
         }
     }, [gameStage, isActiveTurnFlag, selectedCard, myDeck, roomId, playerId, firestore]);
+    
+    /**
+     * New Function: Handle Remove Card from Slot
+     */
+    const handleRemoveCard = useCallback(async (index) => {
+        if (gameStage !== 'preparation') {
+            toast.warn('You can only remove cards during the Preparation phase.');
+            return;
+        }
+
+        const card = myDeck[index];
+        if (!card || !card.id) {
+            toast.warn('No card to remove from this slot.');
+            return;
+        }
+
+        try {
+            // Remove the card from the slot in Firestore
+            const slotDocRef = doc(firestore, 'rooms', roomId, 'players', playerId, 'deck', index.toString());
+            await updateDoc(slotDocRef, {
+                id: null,
+                imageUrl: blankCardImage,
+                cardType: null,
+                cardName: '',
+                position: 'attack',
+                hp: null
+            });
+
+            // Add the card back to the player's hand in Firestore
+            const handDocRef = doc(firestore, 'rooms', roomId, 'players', playerId, 'hand', card.id);
+            await setDoc(handDocRef, {
+                imageUrl: card.imageUrl,
+                cardType: card.cardType,
+                cardName: card.cardName,
+                hp: card.hp || 20
+            });
+
+            // Update local state
+            const updatedDeck = [...myDeck];
+            updatedDeck[index] = {
+                id: null,
+                imageUrl: blankCardImage,
+                cardType: null,
+                cardName: '',
+                position: 'attack',
+                hp: null
+            };
+            setMyDeck(updatedDeck);
+
+            setMyCards(prevCards => [...prevCards, card]);
+
+            toast.success(`Removed ${card.cardName} from slot ${index + 1} and returned to your hand.`);
+            console.log(`Removed ${card.cardName} from slot ${index + 1} and returned to your hand.`);
+        } catch (error) {
+            console.error('Error removing card from slot:', error);
+            toast.error('Failed to remove card from slot.');
+        }
+    }, [gameStage, myDeck, setMyDeck, setMyCards, firestore, roomId, playerId]);
 
     // Function to handle creating a new room
     const handleCreateRoom = useCallback(async () => {
@@ -809,98 +867,157 @@ function Battlefield() {
         }
     }, [username, roomId, firestore, cards, cardsLoading, assetsLoaded]);
 
-    // Function to handle slot clicks
-    const handleSlotClick = useCallback(async (index) => {
-        if (gameStage !== 'preparation' && gameStage !== 'battle') {
-            toast.warn('Cannot place cards at this stage.');
-            return;
-        }
-
-        if (gameStage === 'battle' && !isActiveTurnFlag && !attackSourceCard) {
-            toast.warn("It's not your turn!");
-            return;
-        }
-
-        if (gameStage === 'battle' && hasPlacedCard && !attackSourceCard) {
-            toast.warn('You have already placed a card this turn.');
-            return;
-        }
-
-        // If in attack mode, and the slot is opponent's, handle attack
-        if (attackSourceCard && isOpponentSlot(index)) {
-            handleTargetSelection(index);
-            return;
-        }
-
-        // Ensure a card is selected
-        if (!selectedCard) {
-            toast.warn('Please select a card to place or defend with.');
-            return;
-        }
-
-        // Validate card type based on game stage
-        if (gameStage === 'preparation' && !['monster', 'trap'].includes(selectedCard.card.cardType)) {
-            toast.error('Only Monster and Trap cards can be placed in the slots during preparation.');
-            return;
-        }
-
-        // Ensure the slot is empty
-        if (myDeck[index].imageUrl !== blankCardImage) {
-            toast.warn('This slot is already occupied.');
-            return;
-        }
-
-        try {
-            // Update Firestore: set the card in the slot, including 'id'
-            const slotDocRef = doc(firestore, 'rooms', roomId, 'players', playerId, 'deck', index.toString());
-            await setDoc(slotDocRef, {
-                id: selectedCard.card.id, // **Include the 'id' of the selected card**
-                imageUrl: selectedCard.card.imageUrl,
-                cardType: selectedCard.card.cardType,
-                cardName: selectedCard.card.cardName,
-                position: 'attack',
-                slotIndex: index, // Include slotIndex
-                hp: selectedCard.card.hp || 20 // Set HP
-            }, { merge: true });
-
-            // Update lastCard in Firestore
-            const lastCardRef = doc(firestore, 'rooms', roomId);
-            await updateDoc(lastCardRef, {
-                lastCard: {
-                    card: { ...selectedCard.card, slotIndex: index, hp: selectedCard.card.hp || 20 },
-                    owner: playerId
-                }
-            });
-
-            // Update local state
-            const updatedDeck = [...myDeck];
-            updatedDeck[index] = { ...selectedCard.card, position: 'attack', slotIndex: index, hp: selectedCard.card.hp || 20, id: selectedCard.card.id }; // **Include 'id'**
-            setMyDeck(updatedDeck);
-
-            const updatedMyCards = myCards.filter(card => card.id !== selectedCard.card.id);
-            setMyCards(updatedMyCards);
-
-            // Remove the card from the hand in Firestore
-            const handDocRef = doc(firestore, 'rooms', roomId, 'players', playerId, 'hand', selectedCard.card.id);
-            await deleteDoc(handDocRef);
-
-            // Set hasPlacedCard to true if in battle phase
-            if (gameStage === 'battle') {
-                const playerDocRef = doc(firestore, 'rooms', roomId, 'players', playerId);
-                await updateDoc(playerDocRef, { hasPlacedCard: true });
-                setHasPlacedCard(true);
+        /**
+     * Function to handle slot clicks
+     * Handles both placing and removing cards in the slots.
+     */
+        const handleSlotClick = useCallback(async (index) => {
+            if (gameStage !== 'preparation' && gameStage !== 'battle') {
+                toast.warn('Cannot place or remove cards at this stage.');
+                return;
             }
-
-            // Reset selected card
-            setSelectedCard(null);
-
-            toast.success(`Placed ${selectedCard.card.cardName} in slot ${index + 1}.`);
-            console.log(`Placed ${selectedCard.card.cardName} in slot ${index + 1}.`);
-        } catch (error) {
-            console.error('Error placing card:', error);
-            toast.error('Failed to place card.');
-        }
-    }, [gameStage, isActiveTurnFlag, hasPlacedCard, selectedCard, myDeck, myCards, roomId, playerId, firestore, attackSourceCard, handleTargetSelection]);
+    
+            if (gameStage === 'battle' && !isActiveTurnFlag && !attackSourceCard) {
+                toast.warn("It's not your turn!");
+                return;
+            }
+    
+            if (gameStage === 'battle' && hasPlacedCard && !attackSourceCard) {
+                toast.warn('You have already placed a card this turn.');
+                return;
+            }
+    
+            // Check if the slot is occupied
+            const slot = myDeck[index];
+            if (slot && slot.id) {
+                // Slot is occupied, remove the card
+                try {
+                    // Remove the card from the slot in Firestore
+                    const slotDocRef = doc(firestore, 'rooms', roomId, 'players', playerId, 'deck', index.toString());
+                    await setDoc(slotDocRef, {
+                        id: null, // Clear the 'id' field
+                        imageUrl: blankCardImage,
+                        cardType: null,
+                        cardName: '',
+                        position: 'attack',
+                        hp: null
+                    }, { merge: true });
+    
+                    // Add the card back to the player's hand in Firestore
+                    const handDocRef = doc(firestore, 'rooms', roomId, 'players', playerId, 'hand', slot.id);
+                    await setDoc(handDocRef, {
+                        imageUrl: slot.imageUrl,
+                        cardType: slot.cardType,
+                        cardName: slot.cardName,
+                        hp: slot.hp || 20
+                    }, { merge: true });
+    
+                    // Update local state: remove card from deck and add back to hand
+                    setMyDeck(prevDeck => {
+                        const updatedDeck = [...prevDeck];
+                        updatedDeck[index] = {
+                            id: null,
+                            imageUrl: blankCardImage,
+                            cardType: null,
+                            cardName: '',
+                            position: 'attack',
+                            hp: null
+                        };
+                        return updatedDeck;
+                    });
+    
+                    setMyCards(prevCards => [...prevCards, {
+                        id: slot.id,
+                        imageUrl: slot.imageUrl,
+                        cardType: slot.cardType,
+                        cardName: slot.cardName,
+                        hp: slot.hp || 20
+                    }]);
+    
+                    toast.success(`Removed ${slot.cardName} from slot ${index + 1} and returned it to your hand.`);
+                    console.log(`Removed ${slot.cardName} from slot ${index + 1} and returned it to hand.`);
+                } catch (error) {
+                    console.error('Error removing card from slot:', error);
+                    toast.error('Failed to remove card from slot.');
+                }
+            } else {
+                // Slot is empty, attempt to place the selected card
+                if (!selectedCard) {
+                    toast.warn('Please select a card to place.');
+                    return;
+                }
+    
+                // Validate card type based on game stage
+                if (gameStage === 'preparation' && !['monster', 'trap'].includes(selectedCard.card.cardType)) {
+                    toast.error('Only Monster and Trap cards can be placed in the slots during preparation.');
+                    return;
+                }
+    
+                // Ensure the slot is empty
+                if (myDeck[index].imageUrl !== blankCardImage) {
+                    toast.warn('This slot is already occupied.');
+                    return;
+                }
+    
+                try {
+                    // Update Firestore: set the card in the slot, including 'id'
+                    const slotDocRef = doc(firestore, 'rooms', roomId, 'players', playerId, 'deck', index.toString());
+                    await setDoc(slotDocRef, {
+                        id: selectedCard.card.id, // **Include the 'id' of the selected card**
+                        imageUrl: selectedCard.card.imageUrl,
+                        cardType: selectedCard.card.cardType,
+                        cardName: selectedCard.card.cardName,
+                        position: 'attack',
+                        slotIndex: index, // Include slotIndex
+                        hp: selectedCard.card.hp || 20 // Set HP
+                    }, { merge: true });
+    
+                    // Update lastCard in Firestore
+                    const lastCardRef = doc(firestore, 'rooms', roomId);
+                    await updateDoc(lastCardRef, {
+                        lastCard: {
+                            card: { ...selectedCard.card, slotIndex: index, hp: selectedCard.card.hp || 20 },
+                            owner: playerId
+                        }
+                    });
+    
+                    // Update local state
+                    setMyDeck(prevDeck => {
+                        const updatedDeck = [...prevDeck];
+                        updatedDeck[index] = {
+                            ...selectedCard.card,
+                            position: 'attack',
+                            slotIndex: index,
+                            hp: selectedCard.card.hp || 20,
+                            id: selectedCard.card.id
+                        };
+                        return updatedDeck;
+                    });
+    
+                    setMyCards(prevCards => prevCards.filter(card => card.id !== selectedCard.card.id));
+    
+                    // Remove the card from the hand in Firestore
+                    const handDocRef = doc(firestore, 'rooms', roomId, 'players', playerId, 'hand', selectedCard.card.id);
+                    await deleteDoc(handDocRef);
+    
+                    // Set hasPlacedCard to true if in battle phase
+                    if (gameStage === 'battle') {
+                        const playerDocRef = doc(firestore, 'rooms', roomId, 'players', playerId);
+                        await updateDoc(playerDocRef, { hasPlacedCard: true });
+                        setHasPlacedCard(true);
+                    }
+    
+                    // Reset selected card
+                    setSelectedCard(null);
+    
+                    toast.success(`Placed ${selectedCard.card.cardName} in slot ${index + 1}.`);
+                    console.log(`Placed ${selectedCard.card.cardName} in slot ${index + 1}.`);
+                } catch (error) {
+                    console.error('Error placing card:', error);
+                    toast.error('Failed to place card.');
+                }
+            }
+        }, [gameStage, isActiveTurnFlag, hasPlacedCard, selectedCard, myDeck, myCards, roomId, playerId, firestore, attackSourceCard]);    
 
     // Helper to determine if a slot belongs to the opponent
     const isOpponentSlot = (index) => {
@@ -1469,6 +1586,7 @@ function Battlefield() {
                             myCards={myCards}
                             selectedCard={selectedCard}
                             handlePositionToggle={handlePositionToggle} // **Pass the updated function**
+                            handleRemoveCard={handleRemoveCard} // **Pass the remove function**
                         />                    
                     )}
 
@@ -1538,13 +1656,7 @@ function Battlefield() {
                                     title="Your Deck"
                                     cards={myDeck}
                                     selectedCard={selectedCard}
-                                    onSlotClick={(index) => {
-                                        if (gameStage === 'battle' && !attackSourceCard) {
-                                            handleCardSelection(myDeck[index], index, 'deck');
-                                        } else {
-                                            handleSlotClick(index);
-                                        }
-                                    }}
+                                    onSlotClick={handleSlotClick} // **Use the updated handleSlotClick**
                                     isOpponent={false}
                                     isPlayer={true} // **Player's deck**
                                     gameStage={gameStage}
