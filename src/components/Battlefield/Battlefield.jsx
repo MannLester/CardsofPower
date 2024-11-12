@@ -319,6 +319,12 @@ function Battlefield() {
             return;
         }
 
+        // **Position Check: Only 'attack' position cards can attack**
+        if (selectedCard.card.position !== 'attack') {
+            toast.warn('Only cards in Attack position can be used to attack.');
+            return;
+        }
+
         try {
             const cardId = selectedCard.card.id;
             const cardDocRef = doc(firestore, 'cards', cardId);
@@ -344,9 +350,6 @@ function Battlefield() {
                 attackPts
             });
 
-            // After attack, reset attackSourceCard
-            setAttackSourceCard(null);
-
             toast.info(`Selected ${selectedCard.card.cardName} to attack with (Attack Points: ${attackPts}). Choose an opponent's card to attack.`);
             console.log(`Selected ${selectedCard.card.cardName} to attack with (Attack Points: ${attackPts}).`);
         } catch (error) {
@@ -363,7 +366,7 @@ function Battlefield() {
         }
 
         const targetCard = opponentDeck[targetIndex];
-        if (!targetCard || targetCard.cardType === null) {
+        if (!targetCard || !targetCard.id) {
             // Direct attack
             const damage = attackSourceCard.attackPts; // Use fetched attackPts
             try {
@@ -388,6 +391,13 @@ function Battlefield() {
                 toast.error('Failed to perform attack.');
             }
         } else {
+            // **Position Check: Only 'attack' position cards can be targeted**
+            if (targetCard.position !== 'attack') {
+                toast.warn('You cannot attack a card in Defense position.');
+                console.warn(`Attempted to attack a card in Defense position at index ${targetIndex}.`);
+                return;
+            }
+
             // Attack the target card
             const damage = attackSourceCard.attackPts; // Use fetched attackPts
             const targetDefense = targetCard.position === 'defense' ? 5 : 0; // Example: defense reduces damage
@@ -948,13 +958,6 @@ function Battlefield() {
                 // Reset selected card
                 setSelectedCard(null);
 
-                // Optionally, mark the player as having placed a card
-                // if (gameStage === 'battle') {
-                //     const playerDocRef = doc(firestore, 'rooms', roomId, 'players', playerId);
-                //     await updateDoc(playerDocRef, { hasPlacedCard: true });
-                //     setHasPlacedCard(true);
-                // }
-
             } catch (error) {
                 console.error('Error placing card:', error);
                 toast.error('Failed to place card.');
@@ -969,6 +972,13 @@ function Battlefield() {
     const handleBattleSlotClick = useCallback(async (index) => {
         const slot = myDeck[index];
         if (slot && slot.id && slot.cardType === 'monster') { // Assuming only Monster cards can attack
+            // **Position Check: Only 'attack' position cards can be used to attack**
+            if (slot.position !== 'attack') {
+                toast.warn('Only cards in Attack position can be used to attack.');
+                console.warn(`Attempted to select a card in Defense position at index ${index}.`);
+                return;
+            }
+
             try {
                 const cardId = slot.id;
                 const cardDocRef = doc(firestore, 'cards', cardId);
@@ -1001,23 +1011,23 @@ function Battlefield() {
                 toast.error('Failed to fetch attack points for the selected card.');
             }
         } else {
-            toast.warn('Please select a valid Monster card to attack with.');
+            toast.warn('Please select a valid Monster card in Attack position to attack with.');
         }
     }, [myDeck, firestore, roomId, playerId]);
-    
+
     /**
      * Unified handler for slot clicks.
      * Delegates to phase-specific handlers based on the current game stage.
      */
-        const handleSlotClick = useCallback(async (index) => {
-            if (gameStage === 'preparation') {
-                await handlePreparationSlotClick(index);
-            } else if (gameStage === 'battle') {
-                handleBattleSlotClick(index);
-            } else {
-                toast.warn('Cannot place or remove cards at this stage.');
-            }
-        }, [gameStage, handlePreparationSlotClick, handleBattleSlotClick]);
+    const handleSlotClick = useCallback(async (index) => {
+        if (gameStage === 'preparation') {
+            await handlePreparationSlotClick(index);
+        } else if (gameStage === 'battle') {
+            handleBattleSlotClick(index);
+        } else {
+            toast.warn('Cannot place or remove cards at this stage.');
+        }
+    }, [gameStage, handlePreparationSlotClick, handleBattleSlotClick]);
 
     // Helper to determine if a slot belongs to the opponent
     const isOpponentSlot = (index) => {
@@ -1244,7 +1254,7 @@ function Battlefield() {
                         try {
                             imageUrl = await getDownloadURL(storageRef(storage, imageUrl));
                         } catch (error) {
-                            console.error('Error fetching image URL:', error);
+                            console.error('Error fetching hand card image:', error);
                             imageUrl = blankCardImage;
                         }
                     }
