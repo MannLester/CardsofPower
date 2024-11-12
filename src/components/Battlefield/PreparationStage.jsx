@@ -54,16 +54,19 @@ function PreparationStage({
                             {card.cardName ? (
                                 <div className={styles.cardDetails}>
                                     <p>{card.cardName}</p>
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation(); // Prevent triggering slot click
-                                            handlePositionToggle(index, card.position);
-                                        }}
-                                        className={styles.positionButton}
-                                        aria-label={`Toggle position for ${card.cardName}`}
-                                    >
-                                        {card.position === 'attack' ? 'Switch to Defense' : 'Switch to Attack'}
-                                    </button>
+                                    {/* **Conditionally render the position toggle button only for Monster cards** */}
+                                    {card.cardType === 'monster' && (
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation(); // Prevent triggering slot click
+                                                handlePositionToggle(index, card.position);
+                                            }}
+                                            className={styles.positionButton}
+                                            aria-label={`Toggle position for ${card.cardName}`}
+                                        >
+                                            {card.position === 'attack' ? 'Switch to Defense' : 'Switch to Attack'}
+                                        </button>
+                                    )}
                                     <p>Position: {card.position.charAt(0).toUpperCase() + card.position.slice(1)}</p>
                                 </div>
                             ) : (
@@ -109,7 +112,6 @@ function PreparationStage({
             {opponentReady && <p className={styles.readyStatus}>{opponentUsername} is ready!</p>}
         </div>
     );
-
 }
 
 PreparationStage.propTypes = {

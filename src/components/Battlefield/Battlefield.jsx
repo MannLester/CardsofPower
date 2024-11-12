@@ -89,6 +89,9 @@ function Battlefield() {
     // Player's hand
     const [myCards, setMyCards] = useState([]);
 
+    // Opponent's hand
+    const [opponentCards, setOpponentCards] = useState([]);
+
     // Player's and Opponent's Decks
     const [myDeck, setMyDeck] = useState([]);
     const [opponentDeck, setOpponentDeck] = useState([]);
@@ -133,23 +136,35 @@ function Battlefield() {
      */
 
     // Function to determine the winner
-    const determineWinner = useCallback(() => {
+    const determineWinner = useCallback(async () => {
+        let determinedWinner = 'Draw';
         if (playerHP <= 0 && opponentHP > 0) {
-            setWinner(opponentUsername);
+            determinedWinner = opponentUsername;
         } else if (opponentHP <= 0 && playerHP > 0) {
-            setWinner(ownUsernameDisplay);
-        } else if (playerHP <= 0 && opponentHP <= 0) {
-            setWinner('Draw');
-        } else if (currentRound > totalRounds) {
-            if (playerHP > opponentHP) {
-                setWinner(ownUsernameDisplay);
-            } else if (opponentHP > playerHP) {
-                setWinner(opponentUsername);
-            } else {
-                setWinner('Draw');
-            }
+            determinedWinner = ownUsernameDisplay;
+        } else if (playerHP > opponentHP) {
+            determinedWinner = ownUsernameDisplay;
+        } else if (opponentHP > playerHP) {
+            determinedWinner = opponentUsername;
         }
-    }, [playerHP, opponentHP, opponentUsername, ownUsernameDisplay, currentRound, totalRounds]);
+
+        setWinner(determinedWinner);
+
+        try {
+            // Update gameStage to 'finished' in Firestore
+            const roomDocRef = doc(firestore, 'rooms', roomId);
+            await updateDoc(roomDocRef, {
+                'gameState.gameStage': 'finished',
+                'gameState.timer': 0,
+            });
+            toast.info(`Game Finished! Winner: ${determinedWinner}`);
+            console.log(`Game Finished! Winner: ${determinedWinner}`);
+        } catch (error) {
+            console.error('Error updating game stage to finished:', error);
+            toast.error('Failed to finalize the game.');
+        }
+
+    }, [playerHP, opponentHP, opponentUsername, ownUsernameDisplay, roomId, firestore]);
 
     // Function to switch turns using Firestore transaction
     const switchTurn = useCallback(async () => {
@@ -247,7 +262,19 @@ function Battlefield() {
             switch (spellCard.cardName.toLowerCase()) {
                 case 'heal':
                     // Example: Restore 20 HP to the player
-                    setPlayerHP(prevHP => Math.min(prevHP + 20, 100));
+                    await runTransaction(firestore, async (transaction) => {
+                        const roomDocRef = doc(firestore, 'rooms', roomId);
+                        const roomDoc = await transaction.get(roomDocRef);
+                        if (!roomDoc.exists()) {
+                            throw new Error('Room does not exist!');
+                        }
+
+                        const currentHP = roomDoc.data().hp[playerId] || 100;
+                        const newHP = Math.min(currentHP + 20, 100);
+                        transaction.update(roomDocRef, {
+                            [`hp.${playerId}`]: newHP
+                        });
+                    });
                     toast.success('Heal spell used! Restored 20 HP.');
                     console.log('Heal spell used.');
                     break;
@@ -337,17 +364,19 @@ function Battlefield() {
             const damage = attackSourceCard.attackPts; // Use fetched attackPts
             try {
                 await runTransaction(firestore, async (transaction) => {
-                    const opponentDocRef = doc(firestore, 'rooms', roomId, 'players', opponentId);
-                    const opponentDoc = await transaction.get(opponentDocRef);
-                    if (!opponentDoc.exists()) {
-                        throw new Error('Opponent does not exist.');
+                    const roomDocRef = doc(firestore, 'rooms', roomId);
+                    const roomDoc = await transaction.get(roomDocRef);
+                    if (!roomDoc.exists()) {
+                        throw new Error('Room does not exist!');
                     }
 
-                    const currentOpponentHP = opponentDoc.data().hp || 100;
+                    const currentOpponentHP = roomDoc.data().hp[opponentId] || 100;
                     const newOpponentHP = currentOpponentHP - damage;
-                    transaction.update(opponentDocRef, { hp: Math.max(newOpponentHP, 0) });
+                    transaction.update(roomDocRef, {
+                        [`hp.${opponentId}`]: Math.max(newOpponentHP, 0)
+                    });
                 });
-                setOpponentHP(prevHP => Math.max(prevHP - damage, 0));
+
                 toast.success(`Direct attack! Dealt ${damage} damage to ${opponentUsername}.`);
                 console.log(`Direct attack! Dealt ${damage} damage to ${opponentUsername}.`);
             } catch (error) {
@@ -363,8 +392,6 @@ function Battlefield() {
             if (actualDamage > 0) {
                 try {
                     await runTransaction(firestore, async (transaction) => {
-                        // **Rearranged to perform all reads first**
-
                         // Read roomDocRef and targetDocRef first
                         const roomDocRef = doc(firestore, 'rooms', roomId);
                         const roomDoc = await transaction.get(roomDocRef);
@@ -396,13 +423,11 @@ function Battlefield() {
                                 hp: null
                             });
 
-                            // **New Functionality: Decrease Opponent's HP by 20 when a card is destroyed**
-                            const roomData = roomDoc.data();
-                            const opponentHPField = playerId === 'player1' ? 'player2' : 'player1';
-                            const currentOpponentHP = roomData.hp[opponentHPField] || 100;
+                            // Decrease Opponent's HP by 20 when a card is destroyed
+                            const currentOpponentHP = roomDoc.data().hp[opponentId] || 100;
                             const newOpponentHP = currentOpponentHP - 20;
                             transaction.update(roomDocRef, {
-                                [`hp.${opponentHPField}`]: Math.max(newOpponentHP, 0)
+                                [`hp.${opponentId}`]: Math.max(newOpponentHP, 0)
                             });
 
                             // **Note:** Toasts should not be called inside transactions
@@ -432,8 +457,6 @@ function Battlefield() {
                         return updatedDeck;
                     });
 
-                    // **New Functionality: Update Opponent's HP in Local State**
-                    setOpponentHP(prevHP => Math.max(prevHP - 20, 0));
                     toast.success(`${opponentUsername}'s ${opponentDeck[targetIndex].cardName} was destroyed! Opponent loses 20 HP.`);
                 } catch (error) {
                     console.error('Error attacking target card:', error);
@@ -615,10 +638,9 @@ function Battlefield() {
             }
             await Promise.all(deckPromises);
 
-            // Initialize player1's hand in the hand subcollection
+            // Initialize player1's hand in the hand subcollection with card.id as document ID
             const player1HandRef = collection(firestore, 'rooms', newRoomId, 'players', 'player1', 'hand');
-            const handPromises = userCards.map(card => addDoc(player1HandRef, {
-                id: card.id,
+            const handPromises = userCards.map(card => setDoc(doc(player1HandRef, card.id), {
                 imageUrl: card.imageUrl,
                 cardType: card.cardType,
                 cardName: card.cardName,
@@ -761,10 +783,9 @@ function Battlefield() {
             }
             await Promise.all(deckPromises);
 
-            // Initialize player2's hand in the hand subcollection
+            // Initialize player2's hand in the hand subcollection with card.id as document ID
             const player2HandRef = collection(firestore, 'rooms', roomId, 'players', 'player2', 'hand');
-            const handPromises = userCards.map(card => addDoc(player2HandRef, {
-                id: card.id,
+            const handPromises = userCards.map(card => setDoc(doc(player2HandRef, card.id), {
                 imageUrl: card.imageUrl,
                 cardType: card.cardType,
                 cardName: card.cardName,
@@ -904,6 +925,14 @@ function Battlefield() {
     const handlePositionToggle = useCallback(async (slotIndex, currentPosition) => {
         if (gameStage !== 'preparation') return;
 
+        // **Fetch the card details to verify its type**
+        const slot = myDeck[slotIndex];
+        if (!slot || slot.cardType !== 'monster') {
+            toast.error('Only Monster cards can change positions.');
+            console.error('Attempted to toggle position of a non-Monster card:', slot);
+            return;
+        }
+
         const newPosition = currentPosition === 'attack' ? 'defense' : 'attack';
 
         try {
@@ -969,9 +998,10 @@ function Battlefield() {
             const opponentIdLocal = playerId === 'player1' ? 'player2' : 'player1';
             setOpponentId(opponentIdLocal); // Set opponentId in state
             const opponentDeckRef = collection(firestore, 'rooms', roomId, 'players', opponentIdLocal, 'deck');
+            const opponentHandRef = collection(firestore, 'rooms', roomId, 'players', opponentIdLocal, 'hand');
             const playerHasPlacedCardRef = doc(firestore, 'rooms', roomId, 'players', playerId);
 
-            // Listen to gameState changes
+            // Listen to gameState and hp changes
             const unsubscribeGameState = onSnapshot(roomRef, (docSnap) => {
                 if (docSnap.exists()) {
                     const data = docSnap.data();
@@ -981,6 +1011,20 @@ function Battlefield() {
                         setCurrentRound(data.gameState.currentRound);
                         setCurrentTurn(data.gameState.currentTurn);
                         console.log('Updated gameState:', data.gameState);
+                    }
+
+                    // Listen to hp changes
+                    if (data.hp) {
+                        const currentPlayerHP = data.hp[playerId] || 100;
+                        const currentOpponentHP = data.hp[opponentId] || 100;
+                        setPlayerHP(currentPlayerHP);
+                        setOpponentHP(currentOpponentHP);
+                        console.log(`Updated HP - Player: ${currentPlayerHP}, Opponent: ${currentOpponentHP}`);
+
+                        // Check for game over conditions
+                        if (currentPlayerHP <= 0 || currentOpponentHP <= 0 || data.gameState.currentRound > data.gameState.totalRounds) {
+                            determineWinner();
+                        }
                     }
                 }
             }, (error) => {
@@ -1046,6 +1090,34 @@ function Battlefield() {
                 toast.error('Failed to listen to opponent deck updates.');
             });
 
+            // Listen to opponent's hand changes
+            const unsubscribeOpponentHand = onSnapshot(opponentHandRef, async (querySnapshot) => {
+                const handPromises = querySnapshot.docs.map(async (doc) => {
+                    const cardData = doc.data();
+                    let imageUrl = cardData.imageUrl;
+                    if (imageUrl && imageUrl !== blankCardImage) {
+                        try {
+                            imageUrl = await getDownloadURL(storageRef(storage, imageUrl));
+                        } catch (error) {
+                            console.error('Error fetching hand card image:', error);
+                            imageUrl = blankCardImage;
+                        }
+                    }
+                    return {
+                        id: doc.id, // **Use document ID as card ID**
+                        ...cardData,
+                        imageUrl
+                    };
+                });
+
+                const handArray = await Promise.all(handPromises);
+                setOpponentCards(handArray);
+                console.log('Updated opponentCards:', handArray); // Debugging
+            }, (error) => {
+                console.error('Error listening to opponent hand:', error);
+                toast.error('Failed to listen to opponent hand updates.');
+            });
+
             // Listen to player's deck changes
             const unsubscribePlayerDeck = onSnapshot(playerDeckRef, async (querySnapshot) => {
                 const deckPromises = querySnapshot.docs.map(async (doc) => {
@@ -1099,7 +1171,7 @@ function Battlefield() {
                         }
                     }
                     return {
-                        id: doc.id, // **Include the Firestore document ID**
+                        id: doc.id, // **Use document ID as card ID**
                         ...cardData,
                         imageUrl
                     };
@@ -1165,13 +1237,14 @@ function Battlefield() {
                 unsubscribeGameState();
                 unsubscribeLastCard();
                 unsubscribeOpponentDeck();
+                unsubscribeOpponentHand();
                 unsubscribePlayerDeck();
                 unsubscribePlayerHand();
                 unsubscribeHasPlacedCard();
                 unsubscribePlayers();
             };
         }
-    }, [isRoomJoined, roomId, playerId, gameStage, firestore, cards]);
+    }, [isRoomJoined, roomId, playerId, gameStage, firestore, cards, determineWinner]);
 
     // Listen to each player's graveyard
     useEffect(() => {
@@ -1395,8 +1468,8 @@ function Battlefield() {
                             handleCardSelection={handleCardSelection}
                             myCards={myCards}
                             selectedCard={selectedCard}
-                            handlePositionToggle={handlePositionToggle} // **Pass the new function**
-                        />
+                            handlePositionToggle={handlePositionToggle} // **Pass the updated function**
+                        />                    
                     )}
 
                     {gameStage === 'battle' && (
@@ -1423,10 +1496,10 @@ function Battlefield() {
                                 <div className={styles.opponentHand}>
                                     <h3>{opponentUsername}'s Hand</h3>
                                     <div className={styles.hand}>
-                                        {opponentDeck.length === 0 ? (
+                                        {opponentCards.length === 0 ? (
                                             <p className={styles.emptyMessage}>No cards.</p>
                                         ) : (
-                                            opponentDeck.map((card, index) => (
+                                            opponentCards.map((card, index) => (
                                                 <img
                                                     key={`opponent-hand-card-${index}`}
                                                     src={backCard} // Always show back card
@@ -1442,7 +1515,7 @@ function Battlefield() {
                                 <div className={styles.opponentStats}>
                                     <h3>{opponentUsername}'s Stats</h3>
                                     <p>HP: {opponentHP}</p>
-                                    <p>Cards in Hand: {opponentDeck.length}</p>
+                                    <p>Cards in Hand: {opponentCards.length}</p>
                                 </div>
                             </div>
 

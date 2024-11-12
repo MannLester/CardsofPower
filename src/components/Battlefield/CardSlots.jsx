@@ -25,18 +25,16 @@ function CardSlots({
             <div className={styles.slotsWrapper}>
                 {cards.map((card, index) => (
                     <div
-                        key={index}
+                        key={card.id || index} // Preferably use unique ID
                         className={`${styles.cardSlot} ${selectedCard && selectedCard.index === index ? styles.selected : ''} ${isPlayer ? styles.playerSlot : styles.opponentSlot}`}
                         onClick={() => {
-                            if (isPlayer && onSlotClick) {
-                                onSlotClick(index);
-                            } else if (isOpponent && onSlotClick) {
+                            if ((isPlayer || isOpponent) && onSlotClick) {
                                 onSlotClick(index);
                             }
                         }}
                         aria-label={`Card Slot ${index + 1} ${isPlayer ? '(Your Slot)' : "(Opponent's Slot)"}`}
-                        role={isPlayer || isOpponent ? 'button' : 'img'}
-                        tabIndex={isPlayer || isOpponent ? 0 : -1}
+                        role={(isPlayer || isOpponent) ? 'button' : 'img'}
+                        tabIndex={(isPlayer || isOpponent) ? 0 : -1}
                         onKeyPress={
                             (isPlayer || isOpponent) && onSlotClick
                                 ? (e) => {
@@ -51,11 +49,9 @@ function CardSlots({
                         {card.cardName ? (
                             <img
                                 src={
-                                    isOpponent
-                                        ? (card.position === 'defense' ? backCardImage : backCardImage) // Opponent's cards are always shown as back
-                                        : (card.position === 'defense'
-                                            ? backCardImage // Show back card if in defense
-                                            : card.imageUrl)
+                                    (isPlayer || isOpponent)
+                                        ? (card.position === 'attack' ? card.imageUrl : backCardImage)
+                                        : (card.position === 'attack' ? card.imageUrl : backCardImage)
                                 }
                                 alt={card.cardName}
                                 className={styles.cardImage}
@@ -82,6 +78,7 @@ function CardSlots({
 CardSlots.propTypes = {
     title: PropTypes.string.isRequired,
     cards: PropTypes.arrayOf(PropTypes.shape({
+        id: PropTypes.string, // Added ID prop
         imageUrl: PropTypes.string.isRequired,
         cardType: PropTypes.string,
         cardName: PropTypes.string,
