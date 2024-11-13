@@ -33,6 +33,7 @@ import CardSlots from './CardSlots';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './ToastStyles.css';
+import { useParams } from 'react-router-dom';
 
 import { CardsContext } from './CardsContext';
 
@@ -52,6 +53,7 @@ const [assetsLoaded, setAssetsLoaded] = useState(false);
 const [roomId, setRoomId] = useState('');
 const [playerId, setPlayerId] = useState('');
 const [username, setUsername] = useState('');
+const [userInventory, setUserInventory] = useState([]);
 const [isRoomJoined, setIsRoomJoined] = useState(false);
 const [gameStage, setGameStage] = useState('lobby');
 const [timer, setTimer] = useState(120);
@@ -66,6 +68,7 @@ const [player2Username, setPlayer2Username] = useState('');
 const opponentUsername = playerId === 'player1' ? player2Username : player1Username;
 const ownUsernameDisplay = playerId === 'player1' ? player1Username : player2Username;
 const totalRounds = 5;
+const { userDocId } = useParams(); // Assuming route is defined to include userDocId
 
 // State to track whose turn it is
 const [currentTurn, setCurrentTurn] = useState('player1');
@@ -134,6 +137,38 @@ const isActiveTurnFlag = useMemo(() => currentTurn === playerId, [currentTurn, p
 /**
  * Function Declarations
  */
+
+/**
+     * Fetch user data based on userDocId
+     */
+useEffect(() => {
+    const fetchUserData = async () => {
+        if (!userDocId) {
+            toast.error('Invalid URL. User not specified.');
+            return;
+        }
+
+        try {
+            const userDocRef = doc(firestore, 'users', userDocId);
+            const userDocSnap = await getDoc(userDocRef);
+
+            if (!userDocSnap.exists()) {
+                toast.error('User not found.');
+                console.error('User document does not exist for:', userDocId);
+                return;
+            }
+
+            const userData = userDocSnap.data();
+            setUsername(userData.username); // Set username from Firestore
+            setUserInventory(userData.inventory || []); // Store inventory for later use
+        } catch (error) {
+            console.error('Error fetching user data:', error);
+            toast.error('Failed to fetch user data.');
+        }
+    };
+
+    fetchUserData();
+}, [userDocId, firestore]);
 
 // Function to determine the winner
 const determineWinner = useCallback(async () => {
@@ -365,6 +400,12 @@ const handleTargetSelection = useCallback(async (targetIndex) => {
         return;
     }
 
+    // Ensure it's still the player's turn
+    if (!isActiveTurnFlag) {
+        toast.warn("It's not your turn!");
+        return;
+    }
+
     const targetCard = opponentDeck[targetIndex];
     if (!targetCard || !targetCard.id) {
         // Direct attack
@@ -500,7 +541,7 @@ const handleTargetSelection = useCallback(async (targetIndex) => {
 
     // Reset attackSourceCard
     setAttackSourceCard(null);
-}, [attackSourceCard, opponentDeck, firestore, roomId, opponentId, opponentUsername, switchTurn, cards]);
+}, [attackSourceCard, opponentDeck, firestore, roomId, opponentId, opponentUsername, switchTurn, cards, isActiveTurnFlag]);
 
 // Handle Defend Action
 const handleDefend = useCallback(async () => {
@@ -610,8 +651,10 @@ const handleRemoveCard = useCallback(async (index) => {
 
 // Function to handle creating a new room
 const handleCreateRoom = useCallback(async () => {
-    if (!username.trim()) {
-        toast.warn('Please enter a username.');
+    // Since username is fetched from Firestore, ensure it's available
+    if (!userInventory || userInventory.length === 0) {
+        toast.warn('No cards found in your inventory.');
+        console.warn('Inventory array is empty.');
         return;
     }
 
@@ -644,17 +687,7 @@ const handleCreateRoom = useCallback(async () => {
         console.log('User data retrieved:', userData);
 
         // Fetch user's cards based on inventory
-        const inventory = userData.inventory || [];
-        console.log('User inventory:', inventory);
-
-        if (inventory.length === 0) {
-            toast.warn('No cards found in your inventory.');
-            console.warn('Inventory array is empty.');
-            return;
-        }
-
-        // Map inventory card IDs to card objects from CardsContext
-        const userCards = inventory.map(cardId => {
+        const userCards = userInventory.map(cardId => {
             const card = cards.find(c => c.id === cardId);
             if (card) {
                 return card;
@@ -741,12 +774,14 @@ const handleCreateRoom = useCallback(async () => {
         console.error('Error creating room:', error);
         toast.error('Failed to create room. Please try again.');
     }
-}, [username, firestore, totalRounds, cards, cardsLoading, assetsLoaded]);
+}, [username, firestore, totalRounds, cards, cardsLoading, assetsLoaded, userInventory]);
 
 // Function to handle joining an existing room
 const handleJoinRoom = useCallback(async () => {
-    if (!username.trim()) {
-        toast.warn('Please enter a username.');
+    // Since username is fetched from Firestore, ensure it's available
+    if (!userInventory || userInventory.length === 0) {
+        toast.warn('No cards found in your inventory.');
+        console.warn('Inventory array is empty.');
         return;
     }
 
@@ -784,17 +819,7 @@ const handleJoinRoom = useCallback(async () => {
         console.log('User data retrieved:', userData);
 
         // Fetch user's cards based on inventory
-        const inventory = userData.inventory || [];
-        console.log('User inventory:', inventory);
-
-        if (inventory.length === 0) {
-            toast.warn('No cards found in your inventory.');
-            console.warn('Inventory array is empty.');
-            return;
-        }
-
-        // Map inventory card IDs to card objects from CardsContext
-        const userCards = inventory.map(cardId => {
+        const userCards = userInventory.map(cardId => {
             const card = cards.find(c => c.id === cardId);
             if (card) {
                 return card;
@@ -894,7 +919,7 @@ const handleJoinRoom = useCallback(async () => {
         console.error('Error joining room:', error);
         toast.error('Failed to join room. Please check Room ID and try again.');
     }
-}, [username, roomId, firestore, cards, cardsLoading, assetsLoaded]);
+}, [username, roomId, firestore, cards, cardsLoading, assetsLoaded, userInventory]);
 
 /**
  * Handler for slot clicks during the Preparation phase.
@@ -991,6 +1016,12 @@ const handlePreparationSlotClick = useCallback(async (index) => {
  * Manages attack source selection without invoking card removal.
  */
 const handleBattleSlotClick = useCallback(async (index) => {
+    // **Added Check: Ensure it's the player's turn**
+    if (!isActiveTurnFlag) {
+        toast.warn("It's not your turn!");
+        return;
+    }
+
     const slot = myDeck[index];
     if (slot && slot.id && slot.cardType === 'monster') { // Assuming only Monster cards can attack
         // **Position Check: Only 'attack' position cards can be used to attack**
@@ -1034,7 +1065,7 @@ const handleBattleSlotClick = useCallback(async (index) => {
     } else {
         toast.warn('Please select a valid Monster card in Attack position to attack with.');
     }
-}, [myDeck, firestore, roomId, playerId]);
+}, [myDeck, firestore, roomId, playerId, isActiveTurnFlag]);
 
 // **New Function: Handle Battle Phase Card Placement**
 const handleBattleCardPlacement = useCallback(async (index) => {
@@ -1138,9 +1169,11 @@ const handleSlotClick = useCallback(async (index) => {
         if (isActiveTurnFlag && myDeck[index].id === null) {
             // Attempt to place a card into the empty slot
             await handleBattleCardPlacement(index);
-        } else {
+        } else if (isActiveTurnFlag && myDeck[index].id !== null) {
             // Attempt to attack with the card in the slot
             handleBattleSlotClick(index);
+        } else {
+            toast.warn("It's not your turn!");
         }
     } else {
         toast.warn('Cannot place or remove cards at this stage.');
@@ -1489,7 +1522,7 @@ useEffect(() => {
             unsubscribePlayers();
         };
     }
-}, [isRoomJoined, roomId, playerId, gameStage, firestore, cards, determineWinner]);
+}, [isRoomJoined, roomId, playerId, gameStage, firestore, cards, determineWinner, isActiveTurnFlag]);
 
 // Listen to each player's graveyard
 useEffect(() => {
@@ -1604,7 +1637,7 @@ useEffect(() => {
     if (isRoomJoined && roomId && playerId) {
         const playersRef = collection(firestore, 'rooms', roomId, 'players');
 
-        const unsubscribePlayers = onSnapshot(playersRef, (querySnapshot) => {
+        const unsubscribePlayers = onSnapshot(playersRef, async (querySnapshot) => {
             const players = {};
             querySnapshot.forEach(doc => {
                 players[doc.id] = doc.data();
@@ -1620,11 +1653,13 @@ useEffect(() => {
 
             if (gameStage === 'preparation' && currentPlayer?.hasPlacedCard && opponent?.hasPlacedCard) {
                 // Both players are ready, transition to battle
-                updateDoc(doc(firestore, 'rooms', roomId), {
+                await updateDoc(doc(firestore, 'rooms', roomId), {
                     'gameState.gameStage': 'battle',
                     'gameState.timer': 60, // 1 minute battle timer
                     'gameState.currentTurn': 'player1' // Starting player
                 });
+                setGameStage('battle');
+                setTimer(60);
                 toast.success('Both players are ready! Proceeding to Battle.');
                 console.log('Both players are ready! Proceeding to Battle.');
             }
@@ -1670,14 +1705,6 @@ return (
         {!isRoomJoined && (
             <div className={styles.lobby}>
                 <h2>Welcome to the Battle</h2>
-                <input
-                    type="text"
-                    placeholder="Enter your username"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    className={styles.usernameInput}
-                    aria-label="Username Input"
-                />
                 <div className={styles.roomActions}>
                     <button onClick={handleCreateRoom} className={styles.createRoomButton} aria-label="Create Room">Create Room</button>
                     <input
