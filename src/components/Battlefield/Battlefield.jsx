@@ -221,7 +221,7 @@ function Battlefield() {
 
         // Cleanup: Remove the function when the component unmounts
         return () => {
-            delete window.enableAdminMode;
+            delete window.disableAdminMode;
         };
     }, []);
 
