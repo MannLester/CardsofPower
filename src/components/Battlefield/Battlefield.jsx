@@ -101,6 +101,7 @@ function Battlefield() {
     // Opponent's hand
     const [opponentCards, setOpponentCards] = useState([]);
 
+
     // Player's and Opponent's Decks
     const [myDeck, setMyDeck] = useState([]);
     const [opponentDeck, setOpponentDeck] = useState([]);
@@ -127,6 +128,24 @@ function Battlefield() {
 
     // New State for Attack Flow
     const [attackSourceCard, setAttackSourceCard] = useState(null);
+
+    // Add this line near the other state declarations
+    const [trapCardsDisabled, setTrapCardsDisabled] = useState(false);
+
+        // Utility function to update Firestore for card stats in the cards collection
+    const updateCardStatsInFirestore = async (firestore, card) => {
+        try {
+            const cardDocRef = doc(firestore, 'cards', card.id);
+            await updateDoc(cardDocRef, {
+                inGameAtkPts: card.inGameAtkPts,
+                inGameDefPts: card.inGameDefPts
+            });
+            console.log(`Updated ${card.cardName} stats in Firestore.`);
+        } catch (error) {
+            console.error(`Failed to update Firestore for ${card.cardName}:`, error);
+            toast.error(`Failed to update ${card.cardName} in Firestore.`);
+        }
+    };
 
     /**
      * Admin Mode State
@@ -224,6 +243,28 @@ function Battlefield() {
             delete window.disableAdminMode;
         };
     }, []);
+
+        // Place this after the state declarations
+    useEffect(() => {
+        let intervalId;
+
+        if (gameStage === 'battle') {
+            // Call checkPassiveEffects immediately when entering the battle stage
+            checkPassiveEffects();
+
+            // Set up an interval to call checkPassiveEffects continuously
+            intervalId = setInterval(() => {
+                checkPassiveEffects();
+            }, 1000); // Adjust the interval time as needed
+        }
+
+        // Cleanup function to clear the interval when the component unmounts or gameStage changes
+        return () => {
+            if (intervalId) {
+                clearInterval(intervalId);
+            }
+        };
+    }, [gameStage, myDeck, playerGraveyard]);
 
     // Function to determine the winner
     const determineWinner = useCallback(async () => {
@@ -350,6 +391,13 @@ function Battlefield() {
             return;
         }
     
+        // When handling trap card usage
+        if (trapCardsDisabled) {
+            toast.warn("Trap cards are currently disabled due to Gale Striker.");
+            console.warn("Trap cards are disabled.");
+            return;
+        }
+    
         // Destructure to get cardType, cardName, and cardCharacter
         const { cardType, cardName, cardCharacter } = selectedCard.card;
     
@@ -362,12 +410,62 @@ function Battlefield() {
                 } else if (cardCharacter === 'normal') {
                     toast.info(`${cardName} has no effects.`);
                     console.log(`Normal monster ${cardName} has no effects.`);
-                } else if (cardName === 'Stone Sentinel') {
-                    
+                } else if (cardName === 'Thunder Scout') {
+                    try {
+                        // Fetch opponent's deck
+                        const opponentDeckRef = collection(firestore, 'rooms', roomId, 'players', opponentId, 'deck');
+                        const opponentDeckSnapshot = await getDocs(opponentDeckRef);
+    
+                        if (opponentDeckSnapshot.empty) {
+                            toast.error('Opponent deck is empty.');
+                            console.error('Opponent deck is empty.');
+                            return;
+                        }
+    
+                        // Allow player to pick a card from opponent's deck
+                        const opponentDeckCards = opponentDeckSnapshot.docs.map(doc => doc.data());
+                        const cardNames = opponentDeckCards.map(card => card.cardName).join(', ');
+                        toast.info(`Opponent's deck contains: ${cardNames}. Pick a card to send to the graveyard.`);
+    
+                        // For simplicity, simulate picking the first card
+                        const cardToTransfer = opponentDeckCards[0];
+    
+                        // Transfer the card to the opponent's graveyard
+                        const opponentGraveyardRef = collection(firestore, 'rooms', roomId, 'players', opponentId, 'graveyard');
+                        await addDoc(opponentGraveyardRef, cardToTransfer);
+    
+                        // Remove the card from the opponent's deck
+                        await deleteDoc(doc(opponentDeckRef, cardToTransfer.id));
+    
+                        // Send Thunder Scout to the graveyard
+                        const playerGraveyardRef = collection(firestore, 'rooms', roomId, 'players', playerId, 'graveyard');
+                        await addDoc(playerGraveyardRef, selectedCard.card);
+    
+                        // Provide user feedback
+                        toast.success(`Thunder Scout sent ${cardToTransfer.cardName} from opponent's deck to graveyard.`);
+                        console.log(`Thunder Scout sent ${cardToTransfer.cardName} from opponent's deck to graveyard.`);
+    
+                        // Remove Thunder Scout from the player's deck
+                        setMyDeck(prevDeck => prevDeck.filter(card => card.id !== selectedCard.card.id));
+    
+                    } catch (error) {
+                        console.error(`Error using ${cardName}:`, error);
+                        toast.error(`Failed to use ${cardName}.`);
+                    }
+                } else if (cardName === 'Heart of the Mountain') {
+                    myDeck.forEach(async card => {
+                        if (card.cardAttribute === 'earth') {
+                            card.inGameAtkPts += 500; 
+                        }
+                        else{
+                            card.inGameAtkPts += 200;
+                        }
+                        console.log(`${card.cardName}'s inGameAtkPts increased by ${card.cardAttribute === 'earth' ? 700 : 200}.`);
+                        toast.info(`${card.cardName}'s attack increased by ${card.cardAttribute === 'earth' ? 700 : 200}.`);
 
-                } 
-                
-                
+                        await updateCardStatsInFirestore(firestore, card);
+                    });
+                }
                 break;
     
             case 'spell':
@@ -444,7 +542,7 @@ function Battlefield() {
                 cardName
             });
     
-            toast.info(`Selected ${selectedCard.card.cardName} to attack with (Attack Points: ${attackPts}). Choose an opponent's card to attack.`);
+            toast.info(`Selected ${selectedCard.card.cardName} to attack with (Attack Psoints: ${attackPts}). Choose an opponent's card to attack.`);
             console.log(`Selected ${selectedCard.card.cardName} to attack with (Attack Points: ${attackPts}).`);
         } catch (error) {
             console.error('Error fetching attackPts:', error);
@@ -497,6 +595,29 @@ function Battlefield() {
                 console.warn(`Attempted to attack a card in Defense position at index ${targetIndex}.`);
                 return;
             }
+
+            if (attackSourceCard.cardName === "Lunar Wolf" && targetCard && targetCard.position === 'defense') {
+                // Increase Lunar Wolf's attack points by 500
+                attackSourceCard.inGameAtkPts += 500;
+                updateCardStatsInFirestore(firestore, { ...attackSourceCard, inGameAtkPts: attackSourceCard.inGameAtkPts });
+    
+                toast.info("Lunar Wolf's attack increased by 500 due to attacking a card in defense position!");
+                console.log("Lunar Wolf's attack increased by 500 due to attacking a card in defense position!");
+            }
+
+            if (targetCard.cardName === "Sky Reaver" && attackSourceCard.cardAttribute === 'trap') {
+                // Negate the trap card effect
+                toast.info("Trap card negated by Sky Reaver's ability!");
+                console.log("Trap card negated by Sky Reaver's ability!");
+    
+                // Increase Sky Reaver's attack points by 200
+                targetCard.inGameAtkPts += 200;
+                updateCardStatsInFirestore(firestore, { ...targetCard, inGameAtkPts: targetCard.inGameAtkPts });
+    
+                toast.info("Sky Reaver's attack increased by 200!");
+                console.log("Sky Reaver's attack increased by 200!");
+            }
+    
     
             // Retrieve inGameDefPts of the target card
             const targetCardData = cards.find(c => c.id === targetCard.id);
@@ -504,8 +625,7 @@ function Battlefield() {
                 toast.error('Target card data not found.');
                 return;
             }
-
-
+            
             const attackSourceName = attackSourceCard.cardName;
             const inGameAtkPts = targetCardData.inGameAtkPts || 0;
             const inGameDefPts = targetCardData.inGameDefPts || 0; // Fetch inGameDefPts
@@ -569,7 +689,6 @@ function Battlefield() {
                                             console.error("Invalid inGameAtkPts value:", inGameAtkPts);
                                             return;
                                         }
-                        
                                         // Update the inGameDefPts by adding the enemy's inGameAtkPts
                                         updateDoc(cardDocRef, {
                                             inGameDefPts: currentDefPts + incrementValue
@@ -586,7 +705,37 @@ function Battlefield() {
                                     console.error("Error retrieving Ra's Herald document:", error);
                                 });
                         }
+
+                        if (attackSourceName === "Cyclone Serpent") {
+                            const cardId = "FgOsiifQBNwWIUYC1qVq"; 
+                            const cardDocRef = doc(firestore, 'cards', cardId);
                     
+                            // Get the current document to retrieve currentDefPts
+                            getDoc(cardDocRef)
+                                .then((docSnap) => {
+                                    if (docSnap.exists()) {
+                                        const cardData = docSnap.data();
+                                        if (cardData.id === "FgOsiifQBNwWIUYC1qVq") {
+                                            // Cyclone Serpent Effect: Increase inGameDefPts for all monster cards in myDeck
+                                            myDeck.forEach(card => {
+                                                if (card.cardType === 'monster') {
+                                                    card.inGameDefPts += 100;
+                                                    console.log(`Increased ${card.cardName}'s inGameDefPts by 100 due to Cyclone Serpent's effect.`);
+                                                    toast.info(`Increased ${card.cardName}'s defense by 100 due to Cyclone Serpent's effect.`);
+                                                }
+                                            });
+                                        }
+                                    } else {
+                                        console.error("Cyclone Serpent document does not exist.");
+                                    }
+                                })
+                                .catch((error) => {
+                                    console.error("Error retrieving Cyclone Serpent document:", error);
+                                });
+                            }
+                    } else if (attackSourceName === "Electric Sabre"){
+                        setOpponentHP(prevHP => prevHP - 300);
+                        console.log("Electric Sabre attacked: Opponent loses 300 HP.")
                     }            
                 });
     
@@ -1108,6 +1257,7 @@ function Battlefield() {
 
     // Function to check and activate passive effects
     const checkPassiveEffects = useCallback(() => {
+        
     myDeck.forEach(card => {
             if (card.cardName === "Vine Guardian") {
                 // Notify that Vine Guardian is checking graveyard
@@ -1126,7 +1276,118 @@ function Battlefield() {
             }
             
         });
-    }, [myDeck, playerGraveyard]);
+
+        myDeck.forEach(card => {
+            if (card.cardName === "Thunder Colossus") {
+                // Calculate missing defense points
+                const missingDefPts = card.defPts - card.inGameDefPts;
+                // Calculate the number of 300-point intervals
+                const intervals = Math.floor(missingDefPts / 300);
+                // Increase attack points by 500 for each interval
+                const updatedAtkPts = card.inGameAtkPts + (intervals * 500);
+                card.inGameAtkPts = updatedAtkPts;
+
+                console.log(`Thunder Colossus's inGameAtkPts increased to ${updatedAtkPts} due to ${intervals} intervals of missing defense points.`);
+                toast.info(`Thunder Colossus's attack increased by ${intervals * 500} due to missing defense points.`);
+            }
+        });
+
+        //Storm Wielder passive effect
+        const stormWielderInGraveyard = playerGraveyard.some(graveCard => graveCard.cardName === "Storm Wielder");
+        if (stormWielderInGraveyard) {
+            myDeck.forEach(card => {
+                if (card.cardAttribute === "wind") {
+                    card.inGameAtkPts += 200;
+                    console.log(`Increased ${card.cardName}'s inGameAtkPts by 200 due to Storm Wielder's effect.`);
+                    toast.info(`Increased ${card.cardName}'s attack by 200 due to Storm Wielder's effect.`);
+                }
+            });
+        }
+
+        //Blazing Minotaur passive effect
+        let hasBlazingMinotaur = myDeck.some(card => card.cardName === "Blazing Minotaur");
+        if (hasBlazingMinotaur) {
+            myDeck.forEach(card => {
+                card.inGameAtkPts += 200;
+                console.log(`${card.cardName}'s inGameAtkPts increased by 200.`);
+                toast.info(`${card.cardName}'s attack increased by 200.`);
+            });
+            myDeck.forEach(card => {
+                card.hasBlazingMinotaurEffect = true;
+            });
+        }
+
+
+        //Ixch
+        const ixchelInGraveyard = playerGraveyard.some(card => card.cardName === "Ixchel" && !card.hasBeenResurrected);
+
+        if (ixchelInGraveyard) {
+            // Find the Ixchel card in the graveyard
+            const ixchelCard = playerGraveyard.find(card => card.cardName === "Ixchel");
+    
+            // Update the card's stats
+            ixchelCard.inGameDefPts = 1000;
+            ixchelCard.inGameAtkPts = 1500;
+            ixchelCard.hasBeenResurrected = true; // Mark as resurrected to prevent future resurrection
+    
+            // Add Ixchel back to the deck
+            setMyDeck(prevDeck => [...prevDeck, ixchelCard]);
+    
+            // Remove Ixchel from the graveyard
+            setPlayerGraveyard(prevGraveyard => prevGraveyard.filter(card => card.cardName !== "Ixchel"));
+    
+            console.log("Ixchel has been resurrected with 1000 defense points and 1500 attack points.");
+            toast.success("Ixchel has been resurrected with 1000 defense points and 1500 attack points.");
+        }
+
+        // Check if Necro Warrior is in the graveyard
+        const necroWarriorInGraveyard = playerGraveyard.some(card => card.cardName === "Necro Warrior");
+
+        if (necroWarriorInGraveyard) {
+            // Allow the player to retrieve one card from the graveyard
+            if (playerGraveyard.length > 0) {
+                // For simplicity, let's retrieve the first card (you can implement selection logic if needed)
+                const cardToRetrieve = playerGraveyard[0];
+
+                // Add the retrieved card back to the player's deck
+                setMyDeck(prevDeck => [...prevDeck, cardToRetrieve]);
+
+                // Remove the retrieved card from the graveyard
+                setPlayerGraveyard(prevGraveyard => prevGraveyard.filter(card => card !== cardToRetrieve));
+
+                console.log(`Retrieved ${cardToRetrieve.cardName} from the graveyard due to Necro Warrior's effect.`);
+                toast.success(`Retrieved ${cardToRetrieve.cardName} from the graveyard due to Necro Warrior's effect.`);
+            } else {
+                console.log("No cards in the graveyard to retrieve.");
+                toast.info("No cards in the graveyard to retrieve.");
+            }
+        }
+
+        //Gale Striker passive effect
+        const galeStrikerInDeck = myDeck.some(card => card.cardName === "Gale Striker");
+
+        if (galeStrikerInDeck) {
+            setTrapCardsDisabled(true);
+            console.log("Trap cards cannot be used because Gale Striker is in the deck.");
+            toast.info("Trap cards cannot be used because Gale Striker is in your deck.");
+        } else {
+            setTrapCardsDisabled(false);
+        }
+
+        // Lavapulse Phoenix passive effect
+        playerGraveyard.forEach(card => {
+            if (card.cardName === "Lavapulse Phoenix" && !card.hasActivatedPassive) {
+                setPlayerHP(prevHP => prevHP - 200);
+                setOpponentHP(prevHP => prevHP - 200);
+                console.log("Lavapulse Phoenix's passive effect activated: Both players lose 200 HP.");
+                card.hasActivatedPassive = true; // Ensure the effect only triggers once
+            }
+        });
+
+
+        
+
+    }, [myDeck, playerGraveyard, setPlayerHP, setOpponentHP]);
 
 
     const handleBattleSlotClick = useCallback(async (index) => {
@@ -1178,7 +1439,10 @@ function Battlefield() {
                 console.error('Error fetching card data:', error);
                 toast.error('Failed to fetch attack points for the selected card.');
             }
+
+
         }
+
     }, [myDeck, firestore, setSelectedCard]);
     
 
