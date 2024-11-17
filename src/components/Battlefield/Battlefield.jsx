@@ -412,6 +412,7 @@ function Battlefield() {
         // **Position Check: Only 'attack' position cards can attack**
         if (selectedCard.card.position !== 'attack') {
             toast.warn('Only cards in Attack position can be used to attack.');
+            console.warn(`Attempted to attack a card in Defense position at index ${selectedCard.index}.`);
             return;
         }
 
@@ -478,6 +479,7 @@ function Battlefield() {
                     transaction.update(roomDocRef, {
                         [`hp.${opponentId}`]: Math.max(newOpponentHP, 0)
                     });
+                    setOpponentHP(Math.max(newOpponentHP, 0)); // Update local HP state immediately
                 });
 
                 toast.success(`Direct attack! Dealt ${damage} damage to ${opponentUsername}.`);
@@ -542,6 +544,7 @@ function Battlefield() {
                                 transaction.update(roomDocRef, {
                                     [`hp.${opponentId}`]: Math.max(newOpponentHP, 0)
                                 });
+                                setOpponentHP(Math.max(newOpponentHP, 0)); // Update local HP state immediately
                                 // **Note:** Toasts should not be called inside transactions
                                 console.log(`Card destroyed. Opponent loses ${damageToOpponent} HP.`);
                             } else {
@@ -1336,11 +1339,6 @@ function Battlefield() {
             return;
         }
 
-        if (!hasPlacedAllRequiredCards()) {
-            toast.warn('Please place all your Monster and Trap cards before readying up.');
-            return;
-        }
-
         try {
             const playerDocRef = doc(firestore, 'rooms', roomId, 'players', playerId);
             await setDoc(playerDocRef, {
@@ -1354,7 +1352,7 @@ function Battlefield() {
             console.error('Error setting ready:', error);
             toast.error('Failed to mark as ready.');
         }
-    }, [isRoomJoined, roomId, playerId, firestore, hasPlacedAllRequiredCards]);
+    }, [isRoomJoined, roomId, playerId, firestore]);
 
     // Handle multiplayer game state synchronization
     useEffect(() => {
@@ -1724,7 +1722,7 @@ function Battlefield() {
                 timerRef.current = null;
             }
         };
-    }, [gameStage, timer, isActiveTurnFlag, roomId, switchTurn, firestore, attackSourceCard]);
+    }, [gameStage, timer, isActiveTurnFlag, roomId, switchTurn, attackSourceCard]);
 
     /**
      * Enable Ready Button Upon Both Players Placing Cards
@@ -1894,7 +1892,6 @@ function Battlefield() {
                     {gameStage === 'preparation' && (
                         <PreparationStage
                             handleReady={handleReady}
-                            areAllSlotsFilled={hasPlacedAllRequiredCards()} // **Updated prop**
                             playerReady={playerReady}
                             opponentReady={opponentReady}
                             opponentUsername={opponentUsername}
@@ -1904,8 +1901,8 @@ function Battlefield() {
                             handleCardSelection={handleCardSelection}
                             myCards={myCards}
                             selectedCard={selectedCard}
-                            handlePositionToggle={handlePositionToggle} // **Pass the updated function**
-                            handleRemoveCard={handleRemoveCard} // **Pass the remove function**
+                            handlePositionToggle={handlePositionToggle}
+                            handleRemoveCard={handleRemoveCard}
                         />                    
                     )}
 

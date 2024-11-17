@@ -10,7 +10,6 @@ import backCard from '../../assets/cards/back-card.png'; // Import back card ima
  */
 function PreparationStage({
     handleReady,
-    areAllSlotsFilled,
     playerReady,
     opponentReady,
     opponentUsername,
@@ -141,7 +140,7 @@ function PreparationStage({
             <button
                 onClick={handleReady}
                 className={styles.readyButton}
-                disabled={!areAllSlotsFilled || playerReady}
+                disabled={playerReady}
                 aria-label="Ready to Battle"
             >
                 {playerReady ? 'Ready!' : 'Ready to Battle'}
@@ -155,7 +154,6 @@ function PreparationStage({
 
 PreparationStage.propTypes = {
     handleReady: PropTypes.func.isRequired,
-    areAllSlotsFilled: PropTypes.bool.isRequired,
     playerReady: PropTypes.bool.isRequired,
     opponentReady: PropTypes.bool.isRequired,
     opponentUsername: PropTypes.string.isRequired,
@@ -164,22 +162,22 @@ PreparationStage.propTypes = {
         imageUrl: PropTypes.string.isRequired,
         cardType: PropTypes.string,
         cardName: PropTypes.string,
-        position: PropTypes.oneOf(['attack', 'defense']).isRequired, // **New Field: position**
+        position: PropTypes.oneOf(['attack', 'defense']).isRequired,
     })).isRequired,
     handleSlotClick: PropTypes.func.isRequired,
     handleCardSelection: PropTypes.func.isRequired,
     myCards: PropTypes.arrayOf(PropTypes.shape({
-        id: PropTypes.string.isRequired, // Ensure each card has a unique ID
+        id: PropTypes.string.isRequired,
         imageUrl: PropTypes.string.isRequired,
         cardType: PropTypes.string,
         cardName: PropTypes.string,
     })).isRequired,
     selectedCard: PropTypes.shape({
         card: PropTypes.object,
-        slotIndex: PropTypes.number, // Changed from index to slotIndex
+        slotIndex: PropTypes.number,
     }),
-    handlePositionToggle: PropTypes.func.isRequired, // **New Prop**
-    handleRemoveCard: PropTypes.func.isRequired, // **New Prop**
+    handlePositionToggle: PropTypes.func.isRequired,
+    handleRemoveCard: PropTypes.func.isRequired,
 };
 
 export default PreparationStage;
