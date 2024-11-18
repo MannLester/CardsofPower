@@ -466,142 +466,141 @@ function Battlefield() {
 
         const targetCard = opponentDeck[targetIndex];
         if (!targetCard || !targetCard.id) {
-            // Direct attack
-            const damage = attackSourceCard.attackPts; // Use fetched attackPts
-            try {
-                await runTransaction(firestore, async (transaction) => {
-                    const roomDocRef = doc(firestore, 'rooms', roomId);
-                    const roomDoc = await transaction.get(roomDocRef);
-                    if (!roomDoc.exists()) {
-                        throw new Error('Room does not exist!');
-                    }
+            toast.warn('No valid target card selected.');
+            return;
+        }
 
-                    const currentOpponentHP = roomDoc.data().hp[opponentId] || 5000;
-                    const newOpponentHP = currentOpponentHP - damage;
-                    transaction.update(roomDocRef, {
-                        [`hp.${opponentId}`]: Math.max(newOpponentHP, 0)
-                    });
-                    setOpponentHP(Math.max(newOpponentHP, 0)); // Update local HP state immediately
+        // **Position Check: Only 'attack' position cards can be targeted**
+        if (targetCard.position !== 'attack') {
+            toast.warn('You cannot attack a card in Defense position.');
+            console.warn(`Attempted to attack a card in Defense position at index ${targetIndex}.`);
+            return;
+        }
+
+        try {
+            await runTransaction(firestore, async (transaction) => {
+                // Read roomDocRef and targetDocRef first
+                const roomDocRef = doc(firestore, 'rooms', roomId);
+                const roomDoc = await transaction.get(roomDocRef);
+                if (!roomDoc.exists()) {
+                    throw new Error('Room does not exist!');
+                }
+
+                const targetDocRef = doc(firestore, 'rooms', roomId, 'players', opponentId, 'deck', targetIndex.toString());
+                const targetDoc = await transaction.get(targetDocRef);
+                if (!targetDoc.exists()) {
+                    throw new Error('Target card does not exist.');
+                }
+
+                const targetCardData = targetDoc.data();
+                const currentDefPts = targetCardData.inGameDefPts || 0;
+                const attackingPts = attackSourceCard.attackPts || 0;
+                const newDefPts = Math.max(currentDefPts - attackingPts, 0);
+
+                console.log('Attack calculation:', {
+                    currentDefPts,
+                    attackingPts,
+                    newDefPts,
+                    targetCardData
                 });
 
-                toast.success(`Direct attack! Dealt ${damage} damage to ${opponentUsername}.`);
-                console.log(`Direct attack! Dealt ${damage} damage to ${opponentUsername}.`);
-            } catch (error) {
-                console.error('Error performing direct attack:', error);
-                toast.error('Failed to perform attack.');
-            }
-        } else {
-            // **Position Check: Only 'attack' position cards can be targeted**
-            if (targetCard.position !== 'attack') {
-                toast.warn('You cannot attack a card in Defense position.');
-                console.warn(`Attempted to attack a card in Defense position at index ${targetIndex}.`);
-                return;
-            }
+                // Update the card's defense points in the cards collection
+                const cardDocRef = doc(firestore, 'cards', targetCardData.id);
+                transaction.update(cardDocRef, {
+                    inGameDefPts: newDefPts
+                });
 
-            // Attack the target card
-            const damage = attackSourceCard.attackPts; // Use fetched attackPts
-            const targetDefense = targetCard.position === 'defense' ? 5 : 0; // Example: defense reduces damage
-            const actualDamage = Math.max(damage - targetDefense, 0);
+                if (newDefPts <= 0) {
+                    // Move to graveyard if defense points are depleted
+                    const graveyardRef = collection(firestore, 'rooms', roomId, 'players', opponentId, 'graveyard');
+                    await addDoc(graveyardRef, { ...targetCardData });
+                    // Remove the card from deck and clear its data including 'id'
+                    transaction.update(targetDocRef, {
+                        id: null,
+                        imageUrl: blankCardImage,
+                        cardType: null,
+                        cardName: '',
+                        position: 'attack',
+                        inGameDefPts: null,
+                        inGameAtkPts: null
+                    });
 
-            if (actualDamage > 0) {
-                try {
-                    await runTransaction(firestore, async (transaction) => {
-                        // Read roomDocRef and targetDocRef first
-                        const roomDocRef = doc(firestore, 'rooms', roomId);
-                        const roomDoc = await transaction.get(roomDocRef);
-                        if (!roomDoc.exists()) {
-                            throw new Error('Room does not exist!');
-                        }
+                    // Reset the card's defense points in the cards collection when destroyed
+                    transaction.update(cardDocRef, {
+                        inGameDefPts: targetCardData.defPts || 0 // Reset to original defense points
+                    });
 
-                        const targetDocRef = doc(firestore, 'rooms', roomId, 'players', opponentId, 'deck', targetIndex.toString());
-                        const targetDoc = await transaction.get(targetDocRef);
-                        if (!targetDoc.exists()) {
-                            throw new Error('Target card does not exist.');
-                        }
+                    // **Damage to Opponent's HP based on cardLevel**
+                    const cardLevel = cards.find(c => c.id === targetCardData.id)?.cardLevel || 0;
+                    if (cardLevel > 0) {
+                        const damageToOpponent = 200 * cardLevel;
+                        const currentOpponentHP = roomDoc.data().hp[opponentId] || 5000;
+                        const newOpponentHP = currentOpponentHP - damageToOpponent;
+                        transaction.update(roomDocRef, {
+                            [`hp.${opponentId}`]: Math.max(newOpponentHP, 0)
+                        });
+                        setOpponentHP(Math.max(newOpponentHP, 0));
+                    }
+                } else {
+                    // Update the defense points of the target card in the deck
+                    transaction.update(targetDocRef, {
+                        inGameDefPts: newDefPts
+                    });
+                }
 
-                        const targetCardData = targetDoc.data();
-                        const currentTargetHP = targetCardData.hp || 20;
-                        const newTargetHP = currentTargetHP - actualDamage;
-
-                        if (newTargetHP <= 0) {
-                            // Move to graveyard
-                            const graveyardRef = collection(firestore, 'rooms', roomId, 'players', opponentId, 'graveyard');
-                            await addDoc(graveyardRef, { ...targetCardData });
-                            // Remove the card from deck and clear its data including 'id'
-                            transaction.update(targetDocRef, {
-                                id: null, // Clear the 'id' field
+                // Update local opponentDeck
+                setOpponentDeck(prevDeck => {
+                    const updatedDeck = [...prevDeck];
+                    if (updatedDeck[targetIndex]) {
+                        if (newDefPts <= 0) {
+                            updatedDeck[targetIndex] = {
+                                id: null,
                                 imageUrl: blankCardImage,
                                 cardType: null,
                                 cardName: '',
                                 position: 'attack',
-                                hp: null
-                            });
-
-                            // **Damage to Opponent's HP based on cardLevel**
-                            const cardLevel = cards.find(c => c.id === targetCardData.id)?.cardLevel || 0;
-                            if (cardLevel > 0) {
-                                const damageToOpponent = 200 * cardLevel;
-                                const currentOpponentHP = roomDoc.data().hp[opponentId] || 5000;
-                                const newOpponentHP = currentOpponentHP - damageToOpponent;
-                                transaction.update(roomDocRef, {
-                                    [`hp.${opponentId}`]: Math.max(newOpponentHP, 0)
-                                });
-                                setOpponentHP(Math.max(newOpponentHP, 0)); // Update local HP state immediately
-                                // **Note:** Toasts should not be called inside transactions
-                                console.log(`Card destroyed. Opponent loses ${damageToOpponent} HP.`);
-                            } else {
-                                // No damage applied for Spell/Trap cards
-                                console.log(`Card destroyed (Spell/Trap). No damage applied to opponent.`);
-                            }
+                                inGameDefPts: null,
+                                inGameAtkPts: null
+                            };
                         } else {
-                            transaction.update(targetDocRef, { hp: newTargetHP });
-                            // Toasts should not be called inside transactions
+                            updatedDeck[targetIndex] = {
+                                ...updatedDeck[targetIndex],
+                                inGameDefPts: newDefPts
+                            };
                         }
-                    });
-
-                    // Update local opponentDeck
-                    setOpponentDeck(prevDeck => {
-                        const updatedDeck = [...prevDeck];
-                        if (updatedDeck[targetIndex]) {
-                            if ((updatedDeck[targetIndex].hp || 20) - actualDamage <= 0) {
-                                updatedDeck[targetIndex] = {
-                                    id: null, // Clear the 'id'
-                                    imageUrl: blankCardImage,
-                                    cardType: null,
-                                    cardName: '',
-                                    position: 'attack',
-                                    hp: null
-                                };
-                            } else {
-                                updatedDeck[targetIndex].hp = (updatedDeck[targetIndex].hp || 20) - actualDamage;
-                            }
-                        }
-                        return updatedDeck;
-                    });
-
-                    // **Fetch cardLevel for toast message**
-                    const destroyedCardLevel = cards.find(c => c.id === targetCard.id)?.cardLevel || 0;
-                    if (destroyedCardLevel > 0) {
-                        const damageToOpponent = 200 * destroyedCardLevel;
-                        toast.success(`${opponentUsername}'s ${opponentDeck[targetIndex].cardName} was destroyed! Opponent loses ${damageToOpponent} HP.`);
-                    } else {
-                        toast.info(`${opponentUsername}'s ${opponentDeck[targetIndex].cardName} was destroyed! No damage dealt.`);
                     }
-                } catch (error) {
-                    console.error('Error attacking target card:', error);
-                    toast.error('Failed to attack target card.');
+                    return updatedDeck;
+                });
+            });
+
+            // Show appropriate toast messages after transaction
+            const targetName = targetCard.cardName;
+            const attackPts = attackSourceCard.attackPts || 0;
+            const currentDefPts = targetCard.inGameDefPts || 0;
+            const newDefPts = Math.max(currentDefPts - attackPts, 0);
+
+            if (newDefPts <= 0) {
+                const cardLevel = cards.find(c => c.id === targetCard.id)?.cardLevel || 0;
+                if (cardLevel > 0) {
+                    const damageToOpponent = 200 * cardLevel;
+                    toast.success(`${targetName}'s defenses were broken! ${opponentUsername} loses ${damageToOpponent} HP.`);
+                } else {
+                    toast.info(`${targetName}'s defenses were broken!`);
                 }
             } else {
-                toast.info('Attack was not strong enough to damage the target.');
+                const defenseReduction = currentDefPts - newDefPts;
+                toast.info(`${targetName}'s defense reduced by ${defenseReduction} (${currentDefPts} → ${newDefPts}).`);
             }
+
+            // After attack, switch turn
+            await switchTurn();
+            setAttackSourceCard(null);
+
+        } catch (error) {
+            console.error('Error attacking target card:', error);
+            toast.error('Failed to attack target card.');
         }
-
-        // After attack, switch turn
-        await switchTurn();
-
-        // Reset attackSourceCard
-        setAttackSourceCard(null);
-    }, [attackSourceCard, opponentDeck, firestore, roomId, opponentId, opponentUsername, switchTurn, cards, isActiveTurnFlag]);
+    }, [attackSourceCard, opponentDeck, firestore, roomId, opponentId, switchTurn, cards, isActiveTurnFlag, opponentUsername]);
 
     // Handle Defend Action
     const handleDefend = useCallback(async () => {
@@ -675,7 +674,8 @@ function Battlefield() {
                 cardType: null,
                 cardName: '',
                 position: 'attack',
-                hp: null
+                inGameDefPts: null,
+                inGameAtkPts: null
             });
 
             // Add the card back to the player's hand in Firestore
@@ -684,7 +684,8 @@ function Battlefield() {
                 imageUrl: card.imageUrl,
                 cardType: card.cardType,
                 cardName: card.cardName,
-                hp: card.hp || 20
+                inGameDefPts: card.inGameDefPts || 0,
+                inGameAtkPts: card.inGameAtkPts || 0
             });
 
             // Update local state
@@ -695,7 +696,8 @@ function Battlefield() {
                 cardType: null,
                 cardName: '',
                 position: 'attack',
-                hp: null
+                inGameDefPts: null,
+                inGameAtkPts: null
             };
             setMyDeck(updatedDeck);
 
@@ -815,7 +817,8 @@ function Battlefield() {
                     cardType: null,
                     cardName: '',
                     position: 'attack',
-                    hp: null // Set HP to null for empty slots
+                    inGameDefPts: null,
+                    inGameAtkPts: null
                 }, { merge: true }));
             }
             await Promise.all(deckPromises);
@@ -826,7 +829,8 @@ function Battlefield() {
                 imageUrl: card.imageUrl,
                 cardType: card.cardType,
                 cardName: card.cardName,
-                hp: card.hp || 20 // Ensure HP is set
+                inGameDefPts: card.inGameDefPts || 0,
+                inGameAtkPts: card.inGameAtkPts || 0
             }));
             await Promise.all(handPromises);
 
@@ -957,7 +961,8 @@ function Battlefield() {
                     cardType: null,
                     cardName: '',
                     position: 'attack',
-                    hp: null // Set HP to null for empty slots
+                    inGameDefPts: null,
+                    inGameAtkPts: null
                 }, { merge: true }));
             }
             await Promise.all(deckPromises);
@@ -968,7 +973,8 @@ function Battlefield() {
                 imageUrl: card.imageUrl,
                 cardType: card.cardType,
                 cardName: card.cardName,
-                hp: card.hp || 20 // Ensure HP is set
+                inGameDefPts: card.inGameDefPts || 0,
+                inGameAtkPts: card.inGameAtkPts || 0
             }));
             await Promise.all(handPromises);
 
@@ -1026,14 +1032,15 @@ function Battlefield() {
                     cardName: selectedCard.card.cardName,
                     position: 'attack',
                     slotIndex: index,
-                    hp: selectedCard.card.hp || 20
+                    inGameDefPts: selectedCard.card.inGameDefPts || 0,
+                    inGameAtkPts: selectedCard.card.inGameAtkPts || 0
                 }, { merge: true });
 
                 // Update lastCard in Firestore
                 const lastCardRef = doc(firestore, 'rooms', roomId);
                 await updateDoc(lastCardRef, {
                     lastCard: {
-                        card: { ...selectedCard.card, slotIndex: index, hp: selectedCard.card.hp || 20 },
+                        card: { ...selectedCard.card, slotIndex: index, inGameDefPts: selectedCard.card.inGameDefPts || 0, inGameAtkPts: selectedCard.card.inGameAtkPts || 0 },
                         owner: playerId
                     }
                 });
@@ -1045,7 +1052,8 @@ function Battlefield() {
                         ...selectedCard.card,
                         position: 'attack',
                         slotIndex: index,
-                        hp: selectedCard.card.hp || 20,
+                        inGameDefPts: selectedCard.card.inGameDefPts || 0,
+                        inGameAtkPts: selectedCard.card.inGameAtkPts || 0,
                         id: selectedCard.card.id
                     };
                     return updatedDeck;
@@ -1210,14 +1218,15 @@ function Battlefield() {
                 cardName: selectedCard.card.cardName,
                 position: 'attack',
                 slotIndex: index,
-                hp: selectedCard.card.hp || 20
+                inGameDefPts: selectedCard.card.inGameDefPts || 0,
+                inGameAtkPts: selectedCard.card.inGameAtkPts || 0
             }, { merge: true });
 
             // Update lastCard in Firestore
             const lastCardRef = doc(firestore, 'rooms', roomId);
             await updateDoc(lastCardRef, {
                 lastCard: {
-                    card: { ...selectedCard.card, slotIndex: index, hp: selectedCard.card.hp || 20 },
+                    card: { ...selectedCard.card, slotIndex: index, inGameDefPts: selectedCard.card.inGameDefPts || 0, inGameAtkPts: selectedCard.card.inGameAtkPts || 0 },
                     owner: playerId
                 }
             });
@@ -1229,7 +1238,8 @@ function Battlefield() {
                     ...selectedCard.card,
                     position: 'attack',
                     slotIndex: index,
-                    hp: selectedCard.card.hp || 20,
+                    inGameDefPts: selectedCard.card.inGameDefPts || 0,
+                    inGameAtkPts: selectedCard.card.inGameAtkPts || 0,
                     id: selectedCard.card.id
                 };
                 return updatedDeck;
@@ -1387,15 +1397,30 @@ function Battlefield() {
 
                     // Listen to hp changes
                     if (data.hp) {
-                        const currentPlayerHP = data.hp[playerId] || 5000;
-                        const currentOpponentHP = data.hp[opponentId] || 5000;
-                        setPlayerHP(currentPlayerHP);
-                        setOpponentHP(currentOpponentHP);
-                        console.log(`Updated HP - Player: ${currentPlayerHP}, Opponent: ${currentOpponentHP}`);
+                        const player1HP = data.hp.player1 || 0;
+                        const player2HP = data.hp.player2 || 0;
 
-                        // Check for game over conditions
-                        if (currentPlayerHP <= 0 || currentOpponentHP <= 0 || data.gameState.currentRound > data.gameState.totalRounds) {
-                            determineWinner();
+                        // Update local HP states
+                        if (playerId === 'player1') {
+                            setPlayerHP(player1HP);
+                            setOpponentHP(player2HP);
+                            if (player1HP <= 0) {
+                                setShowGameOverlay(true);
+                                setIsWinner(false);
+                            } else if (player2HP <= 0) {
+                                setShowGameOverlay(true);
+                                setIsWinner(true);
+                            }
+                        } else {
+                            setPlayerHP(player2HP);
+                            setOpponentHP(player1HP);
+                            if (player2HP <= 0) {
+                                setShowGameOverlay(true);
+                                setIsWinner(false);
+                            } else if (player1HP <= 0) {
+                                setShowGameOverlay(true);
+                                setIsWinner(true);
+                            }
                         }
                     }
                 }
@@ -1452,7 +1477,8 @@ function Battlefield() {
                         cardType: null,
                         cardName: '',
                         position: 'attack',
-                        hp: null
+                        inGameDefPts: null,
+                        inGameAtkPts: null
                     };
                 });
                 setOpponentDeck(filledDeck);
@@ -1519,7 +1545,8 @@ function Battlefield() {
                         cardType: null,
                         cardName: '',
                         position: 'attack',
-                        hp: null
+                        inGameDefPts: null,
+                        inGameAtkPts: null
                     };
                 });
                 setMyDeck(filledDeck);
