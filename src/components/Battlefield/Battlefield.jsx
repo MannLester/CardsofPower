@@ -13,7 +13,8 @@ import {
     runTransaction,
     onSnapshot,
     setDoc,
-    deleteDoc
+    deleteDoc,
+    serverTimestamp
 } from 'firebase/firestore';
 import {
     ref as storageRef,
@@ -547,6 +548,25 @@ function Battlefield() {
                         inGameDefPts: newDefPts
                     });
                 }
+
+                // Update last card information in the room document
+                transaction.update(roomDocRef, {
+                    lastCard: {
+                        card: {
+                            ...attackSourceCard.card,
+                            attackPts: attackSourceCard.attackPts,
+                            action: 'attack',
+                            targetCard: {
+                                cardName: targetCard.cardName,
+                                previousDefPts: currentDefPts,
+                                newDefPts: newDefPts,
+                                wasDestroyed: newDefPts <= 0
+                            }
+                        },
+                        owner: playerId,
+                        timestamp: serverTimestamp()
+                    }
+                });
 
                 // Update local opponentDeck
                 setOpponentDeck(prevDeck => {
