@@ -5,10 +5,73 @@
     align-items: center;
     justify-content: center;
     padding: 2rem;
-    background-color: rgba(0, 0, 0, 0.7);
-    border-radius: 1rem;
+    background-color: rgba(0, 0, 0, 0.8);
+    border-radius: 10px;
     color: white;
-    font-size: 1.2rem;
-    width: 80%;
+    text-align: center;
+    max-width: 600px;
     margin: 2rem auto;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+.endStage h2 {
+    font-size: 2.5rem;
+    margin-bottom: 2rem;
+    color: #ffd700;
+    text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+}
+
+.results {
+    background-color: rgba(255, 255, 255, 0.1);
+    padding: 2rem;
+    border-radius: 8px;
+    width: 100%;
+    margin-bottom: 2rem;
+}
+
+.results h3 {
+    color: #ffd700;
+    font-size: 1.8rem;
+    margin-bottom: 1.5rem;
+}
+
+.winner {
+    font-size: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.winner span {
+    color: #ffd700;
+    font-weight: bold;
+    text-shadow: 0 0 5px rgba(255, 215, 0, 0.5);
+}
+
+.players {
+    display: flex;
+    justify-content: space-around;
+    margin-bottom: 1.5rem;
+}
+
+.players p {
+    font-size: 1.2rem;
+    padding: 0.5rem 1rem;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+}
+
+.message {
+    font-size: 1rem;
+    color: #aaa;
+    font-style: italic;
+}
+
+/* Animation for the winner announcement */
+@keyframes glow {
+    0% { text-shadow: 0 0 5px rgba(255, 215, 0, 0.5); }
+    50% { text-shadow: 0 0 20px rgba(255, 215, 0, 0.8); }
+    100% { text-shadow: 0 0 5px rgba(255, 215, 0, 0.5); }
+}
+
+.winner span {
+    animation: glow 2s infinite;
 }

@@ -36,6 +36,7 @@ import './ToastStyles.css';
 import { useParams } from 'react-router-dom';
 
 import { CardsContext } from './CardsContext';
+import GameOverlay from './GameOverlay';
 
 function Battlefield() {
 
@@ -128,10 +129,11 @@ function Battlefield() {
     // New State for Attack Flow
     const [attackSourceCard, setAttackSourceCard] = useState(null);
 
-    /**
-     * Admin Mode State
-     * Controls the visibility of the Delete button in the room list.
-     */
+    // New state for game over overlay
+    const [showGameOverlay, setShowGameOverlay] = useState(false);
+    const [isWinner, setIsWinner] = useState(false);
+
+    // Admin Mode State
     const [isAdmin, setIsAdmin] = useState(false); // **New state variable**
 
     /**
@@ -1724,6 +1726,44 @@ function Battlefield() {
         };
     }, [gameStage, timer, isActiveTurnFlag, roomId, switchTurn, attackSourceCard]);
 
+    // HP monitoring effect
+    useEffect(() => {
+        if (!roomId) return;
+
+        const unsubscribe = onSnapshot(doc(firestore, 'rooms', roomId), (doc) => {
+            if (doc.exists()) {
+                const data = doc.data();
+                const player1HP = data.hp?.player1 || 0;
+                const player2HP = data.hp?.player2 || 0;
+
+                // Update local HP states
+                if (playerId === 'player1') {
+                    setPlayerHP(player1HP);
+                    setOpponentHP(player2HP);
+                    if (player1HP <= 0) {
+                        setShowGameOverlay(true);
+                        setIsWinner(false);
+                    } else if (player2HP <= 0) {
+                        setShowGameOverlay(true);
+                        setIsWinner(true);
+                    }
+                } else {
+                    setPlayerHP(player2HP);
+                    setOpponentHP(player1HP);
+                    if (player2HP <= 0) {
+                        setShowGameOverlay(true);
+                        setIsWinner(false);
+                    } else if (player1HP <= 0) {
+                        setShowGameOverlay(true);
+                        setIsWinner(true);
+                    }
+                }
+            }
+        });
+
+        return () => unsubscribe();
+    }, [roomId, playerId, firestore]);
+
     /**
      * Enable Ready Button Upon Both Players Placing Cards
      */
@@ -1825,6 +1865,7 @@ function Battlefield() {
      */
     return (
         <div className={styles.background} style={{ backgroundImage: `url(${background})` }}>
+            {showGameOverlay && <GameOverlay isWinner={isWinner} />}
             {!isRoomJoined && (
                 <div className={styles.lobby}>
                     <h2>Welcome to the Battle</h2>
@@ -2114,8 +2155,10 @@ function Battlefield() {
 
                     {gameStage === 'finished' && (
                         <EndStage
-                            winner={winner}
                             roomId={roomId}
+                            winner={winner}
+                            player1Username={player1Username}
+                            player2Username={player2Username}
                         />
                     )}
                 </div>
