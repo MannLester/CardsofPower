@@ -1275,19 +1275,38 @@ function Battlefield() {
         if (gameStage === 'preparation') {
             await handlePreparationSlotClick(index);
         } else if (gameStage === 'battle') {
-            if (isActiveTurnFlag && myDeck[index].id === null) {
-                // Attempt to place a card into the empty slot
-                await handleBattleCardPlacement(index);
-            } else if (isActiveTurnFlag && myDeck[index].id !== null) {
-                // Attempt to attack with the card in the slot
-                handleBattleSlotClick(index);
-            } else {
+            if (!isActiveTurnFlag) {
                 toast.warn("It's not your turn!");
+                return;
+            }
+
+            // Check if it's an opponent's slot
+            if (index >= 5) {
+                // Only process opponent card click if we have an attack source card
+                if (attackSourceCard) {
+                    handleTargetSelection(index - 5);
+                } else {
+                    toast.warn('Select your card and click Attack button first.');
+                }
+                return;
+            }
+
+            // Player's own slot
+            const card = myDeck[index];
+            if (!card.id) {
+                // Empty slot - try to place a card if one is selected
+                if (selectedCard) {
+                    await handleBattleCardPlacement(index);
+                }
+            } else {
+                // Select the card for potential attack
+                setSelectedCard({ card, index });
+                toast.info(`Selected ${card.cardName}. Use the Attack button to initiate an attack.`);
             }
         } else {
             toast.warn('Cannot place or remove cards at this stage.');
         }
-    }, [gameStage, handlePreparationSlotClick, handleBattleSlotClick, isActiveTurnFlag, myDeck, handleBattleCardPlacement]);
+    }, [gameStage, handlePreparationSlotClick, handleBattleCardPlacement, isActiveTurnFlag, myDeck, attackSourceCard, selectedCard]);
 
     // Helper to determine if a slot belongs to the opponent
     const isOpponentSlot = (index) => {
