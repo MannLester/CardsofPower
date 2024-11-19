@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { firestore } from './firebaseConfig';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import aiImage from '../assets/images/ai.png';
 import battleImage from '../assets/images/battle.png';
 import shopImage from '../assets/images/shop.png';
@@ -12,6 +14,45 @@ import './HomePage.css'
 
 function HomePage() {
   const { userDocId } = useParams();
+
+  useEffect(() => {
+    const updateCardDefPts = async () => {
+      try {
+        // Get user's inventory
+        const userDocRef = doc(firestore, 'users', userDocId);
+        const userDoc = await getDoc(userDocRef);
+
+        if (!userDoc.exists()) {
+          console.error('User not found');
+          return;
+        }
+
+        const inventory = userDoc.data().inventory || [];
+
+        // Update each card's defPts
+        for (const cardId of inventory) {
+          const cardDocRef = doc(firestore, 'cards', cardId);
+          const cardDoc = await getDoc(cardDocRef);
+
+          if (cardDoc.exists()) {
+            const cardData = cardDoc.data();
+            // Update inGameDefPts to match defPts
+            await updateDoc(cardDocRef, {
+              inGameDefPts: cardData.defPts
+            });
+            console.log('Card defense points updated');
+          }
+        }
+      } catch (error) {
+        console.error('Error updating card defense points:', error);
+      }
+    };
+
+    if (userDocId) {
+      updateCardDefPts();
+    }
+  }, [userDocId]);
+
   return (
     <main id='home' className='pirata-font text-center' style={{ backgroundImage: `url(${loginBackground})` }}>
       <div className="overlay"></div>

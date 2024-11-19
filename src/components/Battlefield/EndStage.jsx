@@ -10,7 +10,7 @@ import styles from './EndStage.module.css';
  * EndStage Component
  * Displays the end of the battle message and handles room cleanup.
  */
-function EndStage({ roomId, winner, player1Username, player2Username }) {
+function EndStage({ roomId, winner, player1Username, player2Username, userDocId }) {
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -38,7 +38,7 @@ function EndStage({ roomId, winner, player1Username, player2Username }) {
 
                 // Redirect to home page after 5 seconds
                 setTimeout(() => {
-                    navigate('/:userDocId/home');
+                    navigate(`/${userDocId}/home`);
                 }, 5000);
             } catch (error) {
                 console.error('Error cleaning up room:', error);
@@ -52,7 +52,7 @@ function EndStage({ roomId, winner, player1Username, player2Username }) {
         return () => {
             clearTimeout(cleanupTimeout);
         };
-    }, [roomId, navigate]);
+    }, [roomId, navigate, userDocId]);
 
     return (
         <div className={styles.endStage}>

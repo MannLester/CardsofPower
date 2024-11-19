@@ -549,7 +549,7 @@ function Battlefield() {
                     });
                 }
 
-                // Update last card information in the room document
+                // Update lastCard in Firestore
                 transaction.update(roomDocRef, {
                     lastCard: {
                         card: {
@@ -563,7 +563,7 @@ function Battlefield() {
                                 wasDestroyed: newDefPts <= 0
                             }
                         },
-                        owner: playerId,
+                        owner: username, // Use username instead of playerId
                         timestamp: serverTimestamp()
                     }
                 });
@@ -1061,7 +1061,8 @@ function Battlefield() {
                 await updateDoc(lastCardRef, {
                     lastCard: {
                         card: { ...selectedCard.card, slotIndex: index, inGameDefPts: selectedCard.card.inGameDefPts || 0, inGameAtkPts: selectedCard.card.inGameAtkPts || 0 },
-                        owner: playerId
+                        owner: username, // Use username instead of selectedCard.owner
+                        timestamp: serverTimestamp()
                     }
                 });
 
@@ -1246,8 +1247,8 @@ function Battlefield() {
             const lastCardRef = doc(firestore, 'rooms', roomId);
             await updateDoc(lastCardRef, {
                 lastCard: {
-                    card: { ...selectedCard.card, slotIndex: index, inGameDefPts: selectedCard.card.inGameDefPts || 0, inGameAtkPts: selectedCard.card.inGameAtkPts || 0 },
-                    owner: playerId
+                    card: { ...selectedCard.card, slotIndex: index, inGameDefPts: selectedCard.card.inGameDefPts, owner: username, inGameAtkPts: selectedCard.card.inGameAtkPts || 0 },
+                    timestamp: serverTimestamp()
                 }
             });
 
