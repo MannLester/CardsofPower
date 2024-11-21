@@ -2198,11 +2198,11 @@ function Battlefield() {
                                 </button>
                                 <button
                                     className={isActiveTurnFlag ? styles.actionButton : styles.actionButtonDisabled}
-                                    onClick={isActiveTurnFlag ? handleDefend : undefined}
+                                    onClick={isActiveTurnFlag ? handleUseEffect : undefined}
                                     disabled={!isActiveTurnFlag}
-                                    aria-label="Defend"
+                                    aria-label="Use Effect"
                                 >
-                                    Defend
+                                    Use Effect
                                 </button>
                                 {attackSourceCard && (
                                     <button
