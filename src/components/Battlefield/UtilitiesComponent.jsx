@@ -303,17 +303,20 @@ UtilitiesComponent.propTypes = {
         cardType: PropTypes.string,
         cardName: PropTypes.string,
         position: PropTypes.oneOf(['attack', 'defense']).isRequired,
+        cardAttribute: PropTypes.string
     })).isRequired,
     hand: PropTypes.arrayOf(PropTypes.shape({
         imageUrl: PropTypes.string.isRequired,
         cardType: PropTypes.string,
         cardName: PropTypes.string,
-        id: PropTypes.string, // Assuming each hand card has a unique ID
+        id: PropTypes.string,
+        cardAttribute: PropTypes.string // Assuming each hand card has a unique ID
     })).isRequired, // **New Prop**
     graveyard: PropTypes.arrayOf(PropTypes.shape({
         imageUrl: PropTypes.string.isRequired,
         cardType: PropTypes.string,
         cardName: PropTypes.string,
+        cardAttribute: PropTypes.string
     })).isRequired,
     roomId: PropTypes.string.isRequired,
     playerId: PropTypes.string.isRequired,
@@ -329,6 +332,7 @@ UtilitiesComponent.propTypes = {
     selectedCard: PropTypes.shape({
         card: PropTypes.object,
         index: PropTypes.number,
+        cardAttribute: PropTypes.string
     }),
     onSlotClick: PropTypes.func.isRequired,
     handleSpellUsage: PropTypes.func.isRequired, // **New Prop**

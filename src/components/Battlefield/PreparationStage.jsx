@@ -123,6 +123,7 @@ PreparationStage.propTypes = {
         imageUrl: PropTypes.string.isRequired,
         cardType: PropTypes.string,
         cardName: PropTypes.string,
+        cardAttribute: PropTypes.string,
         position: PropTypes.oneOf(['attack', 'defense']).isRequired, // **New Field: position**
     })).isRequired,
     handleSlotClick: PropTypes.func.isRequired,
@@ -132,6 +133,7 @@ PreparationStage.propTypes = {
         imageUrl: PropTypes.string.isRequired,
         cardType: PropTypes.string,
         cardName: PropTypes.string,
+        cardAttribute: PropTypes.string
     })).isRequired,
     selectedCard: PropTypes.shape({
         card: PropTypes.object,

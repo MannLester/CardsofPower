@@ -87,6 +87,7 @@ CardSlots.propTypes = {
         imageUrl: PropTypes.string.isRequired,
         cardType: PropTypes.string,
         cardName: PropTypes.string,
+        cardAttribute: PropTypes.string,
         position: PropTypes.oneOf(['attack', 'defense']).isRequired,
         hp: PropTypes.number, // Added HP prop
     })).isRequired,
