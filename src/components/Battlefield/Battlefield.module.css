@@ -355,3 +355,101 @@
     color: #fff;
     font-size: 1.2em;
 }
+
+/* Card Transfer Modal */
+.modalOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal {
+    background-color: #1a1a1a;
+    padding: 2rem;
+    border-radius: 8px;
+    max-width: 80%;
+    max-height: 80vh;
+    overflow-y: auto;
+    color: white;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+.modal h2 {
+    text-align: center;
+    margin-bottom: 1.5rem;
+    color: #ffd700;
+}
+
+.cardGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.cardItem {
+    border: 2px solid #333;
+    border-radius: 8px;
+    padding: 0.5rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: center;
+}
+
+.cardItem:hover {
+    border-color: #ffd700;
+    transform: translateY(-2px);
+}
+
+.cardItem.selected {
+    border-color: #ffd700;
+    box-shadow: 0 0 10px #ffd700;
+}
+
+.cardItem img {
+    width: 100%;
+    height: auto;
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+}
+
+.cardItem p {
+    margin: 0;
+    font-size: 0.9rem;
+    color: #fff;
+}
+
+.modalButtons {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+}
+
+.modalButtons button {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 4px;
+    background-color: #ffd700;
+    color: #000;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.modalButtons button:hover:not(:disabled) {
+    background-color: #ffed4a;
+    transform: translateY(-2px);
+}
+
+.modalButtons button:disabled {
+    background-color: #666;
+    cursor: not-allowed;
+    opacity: 0.7;
+}

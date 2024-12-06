@@ -99,6 +99,23 @@
     color: #333333; /* Dark text */
 }
 
+.removeButton {
+    margin-top: 10px;
+    padding: 8px 12px;
+    font-size: 0.9em;
+    border: none;
+    border-radius: 6px;
+    background-color: #dc3545;
+    color: white;
+    cursor: pointer;
+    transition: background-color 0.3s, transform 0.3s;
+}
+
+.removeButton:hover {
+    background-color: #c82333;
+    transform: scale(1.05);
+}
+
 .readyButton {
     margin-top: 40px; /* Increased margin */
     padding: 15px 35px;
